@@ -19,7 +19,7 @@ struct PhotoResultsView: View {
                     .font(.system(size: 26, weight: .bold))
                     .padding(.top, 12)
 
-                Text("Style: \(result.style.rawValue)")
+                Text("Style: \(result.style?.rawValue ?? "")")
                     .foregroundStyle(.secondary)
 
                 Image(uiImage: rawPreview)

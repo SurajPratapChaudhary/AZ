@@ -28,7 +28,14 @@ final class GuidanceService: ObservableObject {
     private var lastMotionScore: Double = 1.0
 
     private var lastFaceCheck = Date.distantPast
-    private let faceCheckInterval: TimeInterval = 0.6
+    private let faceCheckInterval: TimeInterval = 0.5
+    
+    // Smoothing / Debouncing
+    private var lastStateChange = Date()
+    private let minStateDuration: TimeInterval = 1.2 // Message stays for at least 1.2s
+    
+    // Cache last face result to prevent "Good" flickering during throttle
+    private var lastFaceState: State = .good
 
     func start() {
         if motion.isDeviceMotionAvailable {
@@ -49,25 +56,57 @@ final class GuidanceService: ObservableObject {
     }
 
     func ingestFrame(_ pixelBuffer: CVPixelBuffer) {
+        // 1. Determine "Target" state based on current frame data
+        let targetState: State = calculateTargetState(pixelBuffer)
+
+        // 2. Smooth the transition
+        // Only change state if:
+        // a) The new state is "Good" (we want to recover fast if fixed? maybe not, preventing flicker is better)
+        // b) Enough time has passed since last change (reading time)
+        
+        let now = Date()
+        let timeSinceChange = now.timeIntervalSince(lastStateChange)
+        
+        if targetState != state {
+            // If we are currently "targetState" (already set), ignore.
+            // If we want to change:
+            if timeSinceChange > minStateDuration {
+                state = targetState
+                lastStateChange = now
+            }
+            // ELSE: Keep showing old message so user has time to read it.
+        }
+    }
+    
+    private func calculateTargetState(_ pixelBuffer: CVPixelBuffer) -> State {
         // Brightness check (cheap)
         let bright = averageLuminance(pixelBuffer)
-        let isLowLight = bright < 0.25
+        if bright < 0.25 { return .lowLight }
 
         // Stability check
-        let isUnstable = lastMotionScore < 0.45
+        if lastMotionScore < 0.45 { return .unstable }
 
         // Face-in-frame check (throttled)
-        var needsAdjust = false
         if Date().timeIntervalSince(lastFaceCheck) > faceCheckInterval {
             lastFaceCheck = Date()
-            needsAdjust = !hasFaceCentered(pixelBuffer)
+            
+            // Perform detection
+            if let faceRect = detectFace(pixelBuffer) {
+                // Face found, check if it's in safe frame
+                if !isFaceSafe(faceRect) {
+                    lastFaceState = .adjustPosition
+                } else {
+                    lastFaceState = .good
+                }
+            } else {
+                // If face is nil, we assume scenery => safe.
+                lastFaceState = .good
+            }
         }
-
-        // Decide state priority
-        if isLowLight { state = .lowLight; return }
-        if isUnstable { state = .unstable; return }
-        if needsAdjust { state = .adjustPosition; return }
-        state = .good
+        
+        // Return cached face state (which is valid for faceCheckInterval)
+        // This prevents falling back to .good in between checks if we were in .adjustPosition
+        return lastFaceState
     }
 
     // MARK: - Helpers
@@ -87,18 +126,20 @@ final class GuidanceService: ObservableObject {
         return 0.2126*r + 0.7152*g + 0.0722*b
     }
 
-    private func hasFaceCentered(_ pixelBuffer: CVPixelBuffer) -> Bool {
+    private func detectFace(_ pixelBuffer: CVPixelBuffer) -> CGRect? {
         let req = VNDetectFaceRectanglesRequest()
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .right, options: [:])
         try? handler.perform([req])
+        return req.results?.first?.boundingBox
+    }
 
-        guard let face = (req.results as? [VNFaceObservation])?.first else { return false }
-
+    private func isFaceSafe(_ bb: CGRect) -> Bool {
         // Safe frame normalized (rough, tweak later to match overlay)
         let safe = CGRect(x: 0.18, y: 0.10, width: 0.64, height: 0.78)
 
-        let bb = face.boundingBox
         let center = CGPoint(x: bb.midX, y: bb.midY)
+        // Vision origin is bottom-left, UI is top-left.
+        // But pure checking "contains" for X is same. Y needs flip.
         let centerTopLeft = CGPoint(x: center.x, y: 1.0 - center.y)
 
         return safe.contains(centerTopLeft)

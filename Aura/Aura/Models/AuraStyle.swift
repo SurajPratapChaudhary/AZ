@@ -8,7 +8,7 @@
 
 import Foundation
 
-enum AuraStyle: String, CaseIterable, Identifiable {
+enum AuraStyle: String, CaseIterable, Identifiable, Codable {
     case luxury = "Luxury"
     case cinematic = "Cinematic"
     case clean = "Clean"

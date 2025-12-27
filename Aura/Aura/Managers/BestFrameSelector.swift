@@ -9,7 +9,7 @@ import UIKit
 import Vision
 import CoreImage
 
-struct BestFrameSelector {
+struct BestFrameSelector: Sendable {
 
     struct Result {
         let bestJPEG: Data
@@ -138,7 +138,7 @@ struct BestFrameSelector {
         let handler = VNImageRequestHandler(cgImage: cgImage, orientation: .right, options: [:])
         try? handler.perform([req])
 
-        guard let face = (req.results as? [VNFaceObservation])?.first else {
+        guard let face = req.results?.first else {
             return 0.2 // small fallback so face detection failure doesn't kill the whole score
         }
 

@@ -54,17 +54,31 @@ final class CameraFlowViewModel: ObservableObject {
 
             do {
                 Log.d("Capturing burst...")
+                // Capture runs on camera session queue (internally async), so it's non-blocking
                 let burst = try await container.camera.captureBurst(count: 10)
                 Log.d("Burst captured frames=\(burst.count)")
 
                 Log.d("Selecting best frame...")
-                guard let picked = selector.selectBest(from: burst) else {
+                
+                // CRITICAL: Move heavy image processing off the Main Actor
+                // Create a local instance to avoid capturing MainActor-isolated 'self.selector'
+                let picked = await Task.detached(priority: .userInitiated) {
+                    let backgroundSelector = BestFrameSelector()
+                    return backgroundSelector.selectBest(from: burst)
+                }.value
+
+                guard let picked else {
                     Log.e("BestFrameSelector returned nil")
                     return
                 }
 
                 Log.d("Best frame picked. scoreCount=\(picked.debugScores.count)")
-                guard let rawImage = UIImage(data: picked.bestJPEG) else {
+                
+                // Decode UIImage on background too if possible, but UIImage creation is fast-ish. 
+                // Better to do it here to keep UI responsive.
+                guard let rawImage = await Task.detached(priority: .userInitiated, operation: {
+                    UIImage(data: picked.bestJPEG)
+                }).value else {
                     Log.e("Failed to decode bestJPEG into UIImage")
                     return
                 }
@@ -89,7 +103,7 @@ final class CameraFlowViewModel: ObservableObject {
         guard case let .processing(raw, id) = state, id == jobId else { return }
 
         while true {
-            if let result = try? await container.api.pollPhotoJob(jobId: jobId) {
+            if let result = try? await container.api.pollPhotoJob(jobId: jobId), result.status == .completed {
                 Log.d("Job completed id=\(jobId) variants=\(result.variants.count)")
                 state = .results(result, rawPreview: raw)
                 return
@@ -109,13 +123,17 @@ struct CameraFlowView: View {
             switch vm.state {
             case .camera:
                 CameraView(vm: vm)
+                    .transition(.opacity)
             case .processing(let raw, let jobId):
                 ProcessingView(rawPreview: raw, jobId: jobId)
                     .task { await vm.pollUntilReady(jobId: jobId) }
+                    .transition(.opacity)
             case .results(let result, let raw):
                 PhotoResultsView(rawPreview: raw, result: result)
+                    .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.4), value: vm.state.accessibilityLabel) // Custom equatable helper needed or just rely on state enum changes if Equatable
         .task {
             Log.d("CameraFlowView task start")
             vm.bind(container: container)
@@ -125,8 +143,38 @@ struct CameraFlowView: View {
             await container.camera.start()
             Log.d("Camera started")
         }
+        .onChange(of: vm.state) { _, _ in
+            let gen = UIImpactFeedbackGenerator(style: .medium)
+            gen.impactOccurred()
+        }
         .onDisappear {
             Task { await container.camera.stop() }
+        }
+    }
+}
+
+// Helper for animation value
+extension CameraFlowViewModel.State {
+    var accessibilityLabel: String {
+        switch self {
+        case .camera: return "camera"
+        case .processing: return "processing"
+        case .results: return "results"
+        }
+    }
+}
+
+extension CameraFlowViewModel.State: Equatable {
+    static func == (lhs: CameraFlowViewModel.State, rhs: CameraFlowViewModel.State) -> Bool {
+        switch (lhs, rhs) {
+        case (.camera, .camera):
+            return true
+        case (.processing(_, let id1), .processing(_, let id2)):
+            return id1 == id2
+        case (.results(let r1, _), .results(let r2, _)):
+            return r1.jobId == r2.jobId
+        default:
+            return false
         }
     }
 }

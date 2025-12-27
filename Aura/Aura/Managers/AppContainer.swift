@@ -17,6 +17,7 @@ final class AppContainer: ObservableObject {
     let fileStore = LocalFileStore()
 
     init(api: APIClientProtocol? = nil) {
-        self.api = api ?? MockAPIClient(fileStore: fileStore)
+        // Use SimulatedAPIClient for now to allow full flow testing without backend
+        self.api = api ?? SimulatedAPIClient()
     }
 }

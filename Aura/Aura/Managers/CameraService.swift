@@ -32,9 +32,15 @@ final class CameraService: NSObject, ObservableObject {
     }
 
     // MARK: - Setup
+
     func configure() async {
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-            sessionQueue.async {
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self = self else {
+                    cont.resume()
+                    return
+                }
+                
                 Log.d("configure() begin")
 
                 self.session.beginConfiguration()
@@ -58,8 +64,14 @@ final class CameraService: NSObject, ObservableObject {
                 // Photo output
                 if self.session.canAddOutput(self.photoOutput) {
                     self.session.addOutput(self.photoOutput)
-                    self.photoOutput.isHighResolutionCaptureEnabled = true
-                    Log.d("PhotoOutput added")
+                    if let maxDim = device.activeFormat.supportedMaxPhotoDimensions.last {
+                        self.photoOutput.maxPhotoDimensions = maxDim
+                    }
+                    // Enable concurrent captures if supported (optimizes burst)
+                    if self.photoOutput.isContentAwareDistortionCorrectionSupported {
+                        self.photoOutput.isContentAwareDistortionCorrectionEnabled = false // Speed up
+                    }
+                    Log.d("PhotoOutput added. Concurrent support likely: \(self.photoOutput.maxBracketedCapturePhotoCount > 1)")
                 } else {
                     Log.e("Cannot add PhotoOutput")
                 }
@@ -86,6 +98,8 @@ final class CameraService: NSObject, ObservableObject {
 
                 cont.resume()
             }
+            
+            sessionQueue.async(execute: workItem)
         }
     }
 
@@ -116,8 +130,8 @@ final class CameraService: NSObject, ObservableObject {
     }
 
     // MARK: - Photo capture (single)
-    func capturePhotoJPEG() async throws -> Data {
-        // Ensure session is running (common cause of Fig errors if not)
+    func capturePhotoJPEG(prioritization: AVCapturePhotoOutput.QualityPrioritization = .balanced) async throws -> Data {
+        // Ensure session is running
         guard session.isRunning else {
             Log.e("capturePhotoJPEG called while session not running")
             throw NSError(domain: "AuraCamera", code: -10)
@@ -126,11 +140,13 @@ final class CameraService: NSObject, ObservableObject {
         let captureId = nextId()
 
         return try await withCheckedThrowingContinuation { cont in
-            Log.d("capturePhotoJPEG start id=\(captureId)")
+            // Log.d("captured start id=\(captureId)") // Reduced logs for speed
 
             let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
-            settings.isHighResolutionPhotoEnabled = true
-            settings.photoQualityPrioritization = .balanced
+            if self.photoOutput.maxPhotoDimensions.width > 0 {
+                settings.maxPhotoDimensions = self.photoOutput.maxPhotoDimensions
+            }
+            settings.photoQualityPrioritization = prioritization
 
             let delegate = PhotoCaptureDelegate(captureId: captureId) { [weak self] result in
                 guard let self else { return }
@@ -138,7 +154,6 @@ final class CameraService: NSObject, ObservableObject {
 
                 switch result {
                 case .success(let data):
-                    Log.d("capturePhotoJPEG success id=\(captureId) bytes=\(data.count)")
                     cont.resume(returning: data)
                 case .failure(let error):
                     Log.e("capturePhotoJPEG failure id=\(captureId) err=\(error.localizedDescription)")
@@ -148,27 +163,38 @@ final class CameraService: NSObject, ObservableObject {
 
             self.storeDelegate(delegate, captureId)
 
+            // Must run on session queue? No, capturePhoto is thread safe but best practice to ensure session is valid.
+            // We trust the caller or concurrency model.
             self.photoOutput.capturePhoto(with: settings, delegate: delegate)
         }
     }
 
     // MARK: - Burst capture (~10 frames)
+    /// Captures `count` frames as fast as possible.
     func captureBurst(count: Int = 10) async throws -> [Data] {
         Log.d("captureBurst start count=\(count)")
         var shots: [Data] = []
         shots.reserveCapacity(count)
 
+        // Strategy: Fire sequentially but immediately.
+        // Parallel firing is risky on non-Pro devices and might cause dropped frames.
+        // We use .balanced or .speed to ensure we hit ~10fps if possible.
+        // PRD wants "Premium" so we shouldn't degrade too much, but .balanced is usually fine.
+        
+        let prioritization: AVCapturePhotoOutput.QualityPrioritization = .balanced
+
         for i in 0..<count {
             do {
-                let jpeg = try await capturePhotoJPEG()
+                // We await the result of each capture.
+                // To truly speed up, we'd need to fire overlapping requests, but AVCapturePhotoOutput
+                // acts as a serialization bottleneck anyway.
+                // The key optimization here is removing the explicit proper sleep and using proper error checking.
+                let jpeg = try await capturePhotoJPEG(prioritization: prioritization)
                 shots.append(jpeg)
-                Log.d("burst shot \(i+1)/\(count) ok")
             } catch {
                 Log.e("burst shot \(i+1)/\(count) failed: \(error.localizedDescription)")
+                // If one fails, we continue to try others to salvage the burst
             }
-
-            // Tiny delay helps stability (especially on simulator / older devices)
-            try? await Task.sleep(nanoseconds: 70_000_000) // 70ms
         }
 
         if shots.isEmpty {
@@ -204,14 +230,12 @@ final class CameraService: NSObject, ObservableObject {
         delegatesLock.lock()
         inFlightDelegates[id] = delegate
         delegatesLock.unlock()
-        Log.d("delegate stored id=\(id)")
     }
 
     private func removeDelegate(_ id: Int64) {
         delegatesLock.lock()
         inFlightDelegates.removeValue(forKey: id)
         delegatesLock.unlock()
-        Log.d("delegate removed id=\(id)")
     }
 }
 
@@ -272,4 +296,3 @@ private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegat
         completion(result)
     }
 }
-

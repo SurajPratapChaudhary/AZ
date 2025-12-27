@@ -25,9 +25,8 @@ struct ProcessingView: View {
             ProgressView("Processing…")
                 .tint(Color(hex: "01A67C"))
 
-            Text("Job: \(jobId.prefix(8))")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            // ID removed for premium experience
+            // Text("Job: \(jobId.prefix(8))") ...
 
             Spacer()
         }
