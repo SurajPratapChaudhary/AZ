@@ -8,12 +8,11 @@
 import SwiftUI
 
 struct CameraView: View {
-    @EnvironmentObject private var container: AppContainer
     @ObservedObject var vm: CameraFlowViewModel
 
     var body: some View {
         ZStack {
-            CameraPreviewView(session: container.camera.session)
+            CameraPreviewView(session: vm.cameraService.session)
                 .ignoresSafeArea()
 
             SafeFrameOverlay()

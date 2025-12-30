@@ -14,10 +14,21 @@ final class AppContainer: ObservableObject {
     let permissions = PermissionManager()
     let camera = CameraService()
     let api: APIClientProtocol
+    let auth: AuthService
     let fileStore = LocalFileStore()
+    
+    private var cancellables = Set<AnyCancellable>()
 
     init(api: APIClientProtocol? = nil) {
-        // Use SimulatedAPIClient for now to allow full flow testing without backend
-        self.api = api ?? SimulatedAPIClient()
+        let client = api ?? APIClient()
+        self.api = client
+        self.auth = AuthService(apiClient: client)
+        
+        // Forward AuthService changes to AppContainer to trigger UI updates
+        self.auth.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
 }

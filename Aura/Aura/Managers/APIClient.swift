@@ -47,17 +47,29 @@ enum APIError: Error {
     case decodingError
     case serverError(statusCode: Int)
     case unknown
+    case loginFailed(String)
 }
 
+struct LoginResponse: Codable {
+    let access_token: String
+    let token_type: String
+    let user: User
+    
+    struct User: Codable {
+        let id: String
+        let email: String
+        let credits: Int
+    }
+}
 
 protocol APIClientProtocol {
     func createPhotoJob(style: AuraStyle, jpegData: Data) async throws -> String
     func pollPhotoJob(jobId: String) async throws -> PhotoJobResult?
-    // Helper to upload image (internal or exposed)
+    func login(token: String, provider: String) async throws -> LoginResponse
 }
 
-final class RealAPIClient: APIClientProtocol {
-    private let baseURL = URL(string: "https://api.aura.app/v1")! // Placeholder
+final class APIClient: APIClientProtocol {
+    private let baseURL = URL(string: "http://98.88.32.51:8000")! 
     private let session: URLSession
     
     // For demo/milestone 1, we might simply return a mock Upload URL if backend isn't ready
@@ -129,6 +141,46 @@ final class RealAPIClient: APIClientProtocol {
         return nil // Return nil if not ready, or we could return a "Result" with status processing
     }
     
+    func login(token: String, provider: String = "apple") async throws -> LoginResponse {
+        let url = baseURL.appendingPathComponent("/api/v1/auth/login")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: String] = [
+            "token": token,
+            "provider": provider
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.unknown
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+             print("Login failed with status: \(httpResponse.statusCode)")
+             if let errorString = String(data: data, encoding: .utf8) {
+                 print("Error response: \(errorString)")
+             }
+             throw APIError.serverError(statusCode: httpResponse.statusCode)
+        }
+        
+        do {
+            let loginResponse = try JSONDecoder().decode(LoginResponse.self, from: data)
+            return loginResponse
+        } catch {
+            print("Decoding error: \(error)")
+            // Fallback debugging
+            if let string = String(data: data, encoding: .utf8) {
+                print("Raw Response: \(string)")
+            }
+            throw APIError.decodingError
+        }
+    }
+
     // MARK: - Private Helpers
     
     private func uploadImage(data: Data) async throws -> String {

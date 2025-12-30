@@ -22,15 +22,20 @@ final class CameraFlowViewModel: ObservableObject {
     @Published var guidance: GuidanceService.State = .good
     @Published var isCapturing: Bool = false
 
-    private var container: AppContainer?
+    let cameraService: CameraService
+    private let apiClient: APIClientProtocol
     private let selector = BestFrameSelector()
     private let guidanceService = GuidanceService()
 
-    func bind(container: AppContainer) {
-        self.container = container
-        Log.d("bind(container)")
+    init(cameraService: CameraService = CameraService(), apiClient: APIClientProtocol = APIClient()) {
+        self.cameraService = cameraService
+        self.apiClient = apiClient
+    }
 
-        container.camera.onVideoFrame = { [weak self] pb in
+    func setup() async {
+        Log.d("setup()")
+
+        cameraService.onVideoFrame = { [weak self] pb in
             Task { @MainActor in
                 self?.guidanceService.ingestFrame(pb)
                 self?.guidance = self?.guidanceService.state ?? .good
@@ -39,10 +44,19 @@ final class CameraFlowViewModel: ObservableObject {
 
         guidanceService.start()
         Log.d("Guidance started")
+        
+        // Configure and start camera
+        await cameraService.configure()
+        await cameraService.start()
+        Log.d("Camera started")
+    }
+    
+    func cleanup() async {
+        await cameraService.stop()
     }
 
     func shutterTapped() {
-        guard let container, !isCapturing else { return }
+        guard !isCapturing else { return }
         isCapturing = true
         Log.d("Shutter tapped. style=\(selectedStyle.rawValue)")
 
@@ -54,14 +68,11 @@ final class CameraFlowViewModel: ObservableObject {
 
             do {
                 Log.d("Capturing burst...")
-                // Capture runs on camera session queue (internally async), so it's non-blocking
-                let burst = try await container.camera.captureBurst(count: 10)
+                let burst = try await cameraService.captureBurst(count: 10)
                 Log.d("Burst captured frames=\(burst.count)")
 
                 Log.d("Selecting best frame...")
                 
-                // CRITICAL: Move heavy image processing off the Main Actor
-                // Create a local instance to avoid capturing MainActor-isolated 'self.selector'
                 let picked = await Task.detached(priority: .userInitiated) {
                     let backgroundSelector = BestFrameSelector()
                     return backgroundSelector.selectBest(from: burst)
@@ -74,8 +85,6 @@ final class CameraFlowViewModel: ObservableObject {
 
                 Log.d("Best frame picked. scoreCount=\(picked.debugScores.count)")
                 
-                // Decode UIImage on background too if possible, but UIImage creation is fast-ish. 
-                // Better to do it here to keep UI responsive.
                 guard let rawImage = await Task.detached(priority: .userInitiated, operation: {
                     UIImage(data: picked.bestJPEG)
                 }).value else {
@@ -83,8 +92,8 @@ final class CameraFlowViewModel: ObservableObject {
                     return
                 }
 
-                Log.d("Creating photo job (mock)...")
-                let jobId = try await container.api.createPhotoJob(style: selectedStyle, jpegData: picked.bestJPEG)
+                Log.d("Creating photo job...")
+                let jobId = try await apiClient.createPhotoJob(style: selectedStyle, jpegData: picked.bestJPEG)
 
                 Log.d("Job created id=\(jobId)")
                 state = .processing(rawPreview: rawImage, jobId: jobId)
@@ -97,13 +106,12 @@ final class CameraFlowViewModel: ObservableObject {
     }
 
     func pollUntilReady(jobId: String) async {
-        guard let container else { return }
         Log.d("Polling job id=\(jobId)")
 
         guard case let .processing(raw, id) = state, id == jobId else { return }
 
         while true {
-            if let result = try? await container.api.pollPhotoJob(jobId: jobId), result.status == .completed {
+            if let result = try? await apiClient.pollPhotoJob(jobId: jobId), result.status == .completed {
                 Log.d("Job completed id=\(jobId) variants=\(result.variants.count)")
                 state = .results(result, rawPreview: raw)
                 return
@@ -115,7 +123,6 @@ final class CameraFlowViewModel: ObservableObject {
 
 
 struct CameraFlowView: View {
-    @EnvironmentObject private var container: AppContainer
     @StateObject private var vm = CameraFlowViewModel()
 
     var body: some View {
@@ -133,22 +140,17 @@ struct CameraFlowView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.4), value: vm.state.accessibilityLabel) // Custom equatable helper needed or just rely on state enum changes if Equatable
+        .animation(.easeInOut(duration: 0.4), value: vm.state.accessibilityLabel)
         .task {
             Log.d("CameraFlowView task start")
-            vm.bind(container: container)
-
-            // IMPORTANT: await configure before start (fixes Fig errors + broken captures)
-            await container.camera.configure()
-            await container.camera.start()
-            Log.d("Camera started")
+            await vm.setup()
         }
         .onChange(of: vm.state) { _, _ in
             let gen = UIImpactFeedbackGenerator(style: .medium)
             gen.impactOccurred()
         }
         .onDisappear {
-            Task { await container.camera.stop() }
+            Task { await vm.cleanup() }
         }
     }
 }

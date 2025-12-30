@@ -8,11 +8,19 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var container = AppContainer()
+    @AppStorage("aura.didOnboard") private var didOnboard = false
+    @AppStorage("aura.authToken") private var authToken: String?
     
     var body: some View {
-        RootView()
-            .environmentObject(container)
+        Group {
+            if !didOnboard {
+                OnboardingView()
+            } else if authToken == nil || authToken?.isEmpty == true {
+                AuthView()
+            } else {
+                CameraFlowView()
+            }
+        }
     }
 }
 

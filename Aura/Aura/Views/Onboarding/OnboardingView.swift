@@ -8,8 +8,8 @@
 import SwiftUI
 
 struct OnboardingView: View {
-    @EnvironmentObject private var container: AppContainer
     @AppStorage("aura.didOnboard") private var didOnboard = false
+    @StateObject private var permissionManager = PermissionManager()
 
     var body: some View {
         VStack(spacing: 14) {
@@ -29,9 +29,9 @@ struct OnboardingView: View {
 
             Button {
                 Task {
-                    let cam = await container.permissions.requestCamera()
-                    let pho = await container.permissions.requestPhotos()
-                    _ = await container.permissions.requestNotifications()
+                    let cam = await permissionManager.requestCamera()
+                    let pho = await permissionManager.requestPhotos()
+                    _ = await permissionManager.requestNotifications()
 
                     if cam && pho {
                         didOnboard = true
@@ -52,6 +52,6 @@ struct OnboardingView: View {
         }
         .padding(.top, 30)
         .background(Color.black.ignoresSafeArea())
-        .task { await container.permissions.refresh() }
+        .task { await permissionManager.refresh() }
     }
 }
