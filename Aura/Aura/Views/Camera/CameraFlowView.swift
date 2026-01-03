@@ -1,31 +1,32 @@
-//
-//  CameraFlowView.swift
-//  Aura
-//
-//  Created by Alijonov Shohruhmirzo on 24/12/25.
-//
 
 import SwiftUI
 import UIKit
 import Combine
+import AVFoundation
 
 @MainActor
 final class CameraFlowViewModel: ObservableObject {
     enum State {
         case camera
-        case processing(rawPreview: UIImage, jobId: String)
-        case results(PhotoJobResult, rawPreview: UIImage)
+        case enhancing(rawPreview: UIImage, jobId: String)
+        case variantsReady(PhotoJobResult, rawPreview: UIImage)
+        case generatingReel(jobId: String, selectedImage: UIImage)
+        case reelReady(videoURL: URL)
     }
 
     @Published var state: State = .camera
     @Published var selectedStyle: AuraStyle = .luxury
     @Published var guidance: GuidanceService.State = .good
     @Published var isCapturing: Bool = false
+    @Published var progressMessage: String = "Processing..."
 
     let cameraService: CameraService
     private let apiClient: APIClientProtocol
     private let selector = BestFrameSelector()
     private let guidanceService = GuidanceService()
+    
+    // Store original best frame data for Reel generation
+    private var bestFrameData: Data?
 
     init(cameraService: CameraService = CameraService(), apiClient: APIClientProtocol = APIClient()) {
         self.cameraService = cameraService
@@ -45,7 +46,6 @@ final class CameraFlowViewModel: ObservableObject {
         guidanceService.start()
         Log.d("Guidance started")
         
-        // Configure and start camera
         await cameraService.configure()
         await cameraService.start()
         Log.d("Camera started")
@@ -54,10 +54,18 @@ final class CameraFlowViewModel: ObservableObject {
     func cleanup() async {
         await cameraService.stop()
     }
+    
+    func reset() {
+        state = .camera
+        progressMessage = "Processing..."
+        bestFrameData = nil
+        Task { await cameraService.start() }
+    }
 
     func shutterTapped() {
         guard !isCapturing else { return }
         isCapturing = true
+        progressMessage = "Capturing..."
         Log.d("Shutter tapped. style=\(selectedStyle.rawValue)")
 
         Task {
@@ -70,6 +78,8 @@ final class CameraFlowViewModel: ObservableObject {
                 Log.d("Capturing burst...")
                 let burst = try await cameraService.captureBurst(count: 10)
                 Log.d("Burst captured frames=\(burst.count)")
+                
+                await MainActor.run { progressMessage = "Filtering Best Shot..." }
 
                 Log.d("Selecting best frame...")
                 
@@ -83,7 +93,8 @@ final class CameraFlowViewModel: ObservableObject {
                     return
                 }
 
-                Log.d("Best frame picked. scoreCount=\(picked.debugScores.count)")
+                // Store for later Reel generation
+                self.bestFrameData = picked.bestJPEG
                 
                 guard let rawImage = await Task.detached(priority: .userInitiated, operation: {
                     UIImage(data: picked.bestJPEG)
@@ -91,32 +102,124 @@ final class CameraFlowViewModel: ObservableObject {
                     Log.e("Failed to decode bestJPEG into UIImage")
                     return
                 }
+                
+                await MainActor.run { progressMessage = "Enhancing Shot..." }
 
-                Log.d("Creating photo job...")
-                let jobId = try await apiClient.createPhotoJob(style: selectedStyle, jpegData: picked.bestJPEG)
+                Log.d("Enhancing shot...")
+                // Stop camera while processing to save resources
+                await cameraService.stop()
+                
+                let jobId = try await apiClient.enhanceShot(style: selectedStyle.rawValue, jpegData: picked.bestJPEG)
 
-                Log.d("Job created id=\(jobId)")
-                state = .processing(rawPreview: rawImage, jobId: jobId)
-
+                Log.d("Enhance job created id=\(jobId)")
+                state = .enhancing(rawPreview: rawImage, jobId: jobId)
+                
             } catch {
                 Log.e("Capture flow error: \(error.localizedDescription)")
-                state = .camera
+                progressMessage = "Error: \(error.localizedDescription)"
+                // Optionally show error alert here
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                reset()
             }
         }
     }
-
-    func pollUntilReady(jobId: String) async {
-        Log.d("Polling job id=\(jobId)")
-
-        guard case let .processing(raw, id) = state, id == jobId else { return }
-
+    
+    func pollEnhanceJob(jobId: String) async {
+        Log.d("Polling enhance job id=\(jobId)")
+        
+        guard case let .enhancing(raw, id) = state, id == jobId else { return }
+        
+        // 1-3 seconds polling suggested by user
+        let pollInterval: UInt64 = 2_000_000_000 // 2 seconds
+        
         while true {
-            if let result = try? await apiClient.pollPhotoJob(jobId: jobId), result.status == .completed {
-                Log.d("Job completed id=\(jobId) variants=\(result.variants.count)")
-                state = .results(result, rawPreview: raw)
-                return
+            guard case .enhancing = state else { return }
+            
+            do {
+                if let result = try await apiClient.getJobStatus(jobId: jobId) {
+                    if result.status == .completed {
+                        Log.d("Enhance job completed variants=\(result.variants.count)")
+                        state = .variantsReady(result, rawPreview: raw)
+                        return
+                    } else if result.status == .failed {
+                        Log.e("Enhance job failed")
+                        progressMessage = "Enhancement failed."
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        reset()
+                        return
+                    }
+                }
+            } catch {
+                Log.e("Polling error: \(error)")
             }
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            
+            try? await Task.sleep(nanoseconds: pollInterval)
+        }
+    }
+    
+    func generateReel(from image: UIImage) {
+        guard let data = bestFrameData else {
+            Log.e("No best frame data found for reel")
+            return
+        }
+        
+        Task {
+            @MainActor in
+            // Stop polling or any other state
+            progressMessage = "Generating Reel..."
+            
+            do {
+                let jobId = try await apiClient.generateReel(jpegData: data)
+                Log.d("Reel job created id=\(jobId)")
+                state = .generatingReel(jobId: jobId, selectedImage: image)
+                
+            } catch {
+                Log.e("Generate reel error: \(error)")
+                progressMessage = "Failed to start video generation."
+            }
+        }
+    }
+    
+    func pollReelJob(jobId: String) async {
+        Log.d("Polling reel job id=\(jobId)")
+        
+        guard case .generatingReel = state else { return }
+        
+        // 4-6 seconds polling suggested by user
+        let pollInterval: UInt64 = 5_000_000_000 // 5 seconds
+        
+        while true {
+            guard case .generatingReel = state else { return }
+            
+            do {
+                if let result = try await apiClient.getJobStatus(jobId: jobId) {
+                    if result.status == .completed {
+                        // Check if we have urls
+                        if let videoURL = result.variants.first {
+                            Log.d("Reel job completed url=\(videoURL)")
+                            state = .reelReady(videoURL: videoURL)
+                            return
+                        } else {
+                             Log.e("Reel job completed but no URLs found.")
+                             // Maybe return? Or wait? 
+                             // If completed without URL, it's virtually failed for us.
+                             progressMessage = "Video generation returned no file."
+                             try? await Task.sleep(nanoseconds: 2_000_000_000)
+                             reset()
+                             return
+                        }
+                    } else if result.status == .failed {
+                        progressMessage = "Video generation failed."
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        reset()
+                        return
+                    }
+                }
+            } catch {
+                Log.e("Polling error: \(error)")
+            }
+            
+            try? await Task.sleep(nanoseconds: pollInterval)
         }
     }
 }
@@ -131,13 +234,44 @@ struct CameraFlowView: View {
             case .camera:
                 CameraView(vm: vm)
                     .transition(.opacity)
-            case .processing(let raw, let jobId):
-                ProcessingView(rawPreview: raw, jobId: jobId)
-                    .task { await vm.pollUntilReady(jobId: jobId) }
+                
+            case .enhancing(let raw, let jobId):
+                ProcessingView(image: raw, message: vm.progressMessage)
+                    .task { await vm.pollEnhanceJob(jobId: jobId) }
                     .transition(.opacity)
-            case .results(let result, let raw):
-                PhotoResultsView(rawPreview: raw, result: result)
+                    
+            case .variantsReady(let result, let raw):
+                PhotoResultsView(rawImage: raw, variants: result.variants, onRetake: {
+                    vm.reset()
+                }, onCreateReel: { selectedImage in
+                   vm.generateReel(from: selectedImage)
+                })
+                .transition(.opacity)
+                
+            case .generatingReel(let jobId, let image):
+                ProcessingView(image: image, message: vm.progressMessage)
+                    .task { await vm.pollReelJob(jobId: jobId) }
                     .transition(.opacity)
+                    
+            case .reelReady(let url):
+                VideoResultView(videoURL: url, onBack: {
+                    vm.reset()
+                })
+                .transition(.opacity)
+            }
+            
+            // Overlay for initial burst capture & filtering logic
+            if vm.isCapturing {
+                 Color.black.opacity(0.6).ignoresSafeArea()
+                 VStack {
+                     ProgressView()
+                         .tint(.white)
+                         .scaleEffect(1.5)
+                     Text(vm.progressMessage)
+                         .font(.headline)
+                         .foregroundStyle(.white)
+                         .padding(.top, 10)
+                 }
             }
         }
         .animation(.easeInOut(duration: 0.4), value: vm.state.accessibilityLabel)
@@ -160,8 +294,10 @@ extension CameraFlowViewModel.State {
     var accessibilityLabel: String {
         switch self {
         case .camera: return "camera"
-        case .processing: return "processing"
-        case .results: return "results"
+        case .enhancing: return "enhancing"
+        case .variantsReady: return "variantsReady"
+        case .generatingReel: return "generatingReel"
+        case .reelReady: return "reelReady"
         }
     }
 }
@@ -171,13 +307,16 @@ extension CameraFlowViewModel.State: Equatable {
         switch (lhs, rhs) {
         case (.camera, .camera):
             return true
-        case (.processing(_, let id1), .processing(_, let id2)):
+        case (.enhancing(_, let id1), .enhancing(_, let id2)):
             return id1 == id2
-        case (.results(let r1, _), .results(let r2, _)):
+        case (.variantsReady(let r1, _), .variantsReady(let r2, _)):
             return r1.jobId == r2.jobId
+        case (.generatingReel(let id1, _), .generatingReel(let id2, _)):
+            return id1 == id2
+        case (.reelReady(let u1), .reelReady(let u2)):
+            return u1 == u2
         default:
             return false
         }
     }
 }
-

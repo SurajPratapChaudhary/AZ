@@ -1,36 +1,46 @@
-//
-//  ProcessingView.swift
-//  Aura
-//
-//  Created by Alijonov Shohruhmirzo on 24/12/25.
-//
-
 
 import SwiftUI
 
 struct ProcessingView: View {
-    let rawPreview: UIImage
-    let jobId: String
-
+    let image: UIImage
+    let message: String
+    @State private var isAnimating = false
+    
     var body: some View {
-        VStack(spacing: 16) {
-            Spacer()
-
-            Image(uiImage: rawPreview)
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            // Blurred background
+            Image(uiImage: image)
                 .resizable()
-                .scaledToFit()
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-                .padding(.horizontal, 18)
-
-            ProgressView("Processing…")
-                .tint(Color(hex: "01A67C"))
-
-            // ID removed for premium experience
-            // Text("Job: \(jobId.prefix(8))") ...
-
-            Spacer()
+                .aspectRatio(contentMode: .fill)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+                .blur(radius: 20)
+                .opacity(0.6)
+            
+            VStack(spacing: 24) {
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.2), lineWidth: 4)
+                        .frame(width: 80, height: 80)
+                    
+                    Circle()
+                        .trim(from: 0, to: 0.7)
+                        .stroke(Color.white, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                        .frame(width: 80, height: 80)
+                        .rotationEffect(Angle(degrees: isAnimating ? 360 : 0))
+                        .onAppear {
+                            withAnimation(Animation.linear(duration: 1).repeatForever(autoreverses: false)) {
+                                isAnimating = true
+                            }
+                        }
+                }
+                
+                Text(message)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.white)
+            }
         }
-        .background(Color.black.ignoresSafeArea())
-        .foregroundStyle(.white)
     }
 }
