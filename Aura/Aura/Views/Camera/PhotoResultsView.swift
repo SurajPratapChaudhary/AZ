@@ -14,7 +14,6 @@ struct PhotoResultsView: View {
             Color.black.ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Main Header
                 HStack {
                     Button(action: onRetake) {
                         Image(systemName: "xmark")
@@ -31,7 +30,6 @@ struct PhotoResultsView: View {
                 
                 Spacer()
                 
-                // Grid of 4 images
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ForEach(0..<min(variants.count, 4), id: \.self) { index in
                         AsyncImage(url: variants[index]) { phase in
@@ -78,10 +76,6 @@ struct PhotoResultsView: View {
                 
                 // Bottom Actions
                 Button {
-                    // In a real app, we'd load the UIImage from the URL or cache manager
-                    // passing rawImage for now or we need to download it
-                    // The viewmodel generateReel actually uses the Original Data, 
-                    // so passing any image here is mostly for the 'starting' animation if needed.
                     onCreateReel(rawImage)
                     
                 } label: {

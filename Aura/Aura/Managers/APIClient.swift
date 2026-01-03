@@ -53,7 +53,7 @@ enum APIError: Error {
 protocol APIClientProtocol {
     func login(token: String, provider: String) async throws -> LoginResponse
     func enhanceShot(style: String, jpegData: Data) async throws -> String
-    func generateReel(jpegData: Data) async throws -> String
+    func generateReel(imagesData: [Data]) async throws -> String
     func getJobStatus(jobId: String) async throws -> PhotoJobResult?
     
     // Kept for backward compatibility if needed, but implementation will use enhanceShot
@@ -62,7 +62,7 @@ protocol APIClientProtocol {
 }
 
 final class APIClient: APIClientProtocol {
-    private let baseURL = URL(string: "http://98.88.32.51:8000")!
+    private let baseURL = URL(string: "https://api.wearestellar.com")!
     private let session: URLSession
     
     init(session: URLSession = .shared) {
@@ -85,7 +85,6 @@ final class APIClient: APIClientProtocol {
         ]
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        // Log Body (careful with sensitive token, maybe truncate)
         Log.d("API Login Body: \(body)")
         
         do {
@@ -105,7 +104,6 @@ final class APIClient: APIClientProtocol {
                  throw APIError.serverError(statusCode: httpResponse.statusCode)
             }
             
-            // Log Response Data
             if let responseString = String(data: data, encoding: .utf8) {
                 Log.d("API Login Response Body: \(responseString)")
             }
@@ -163,9 +161,9 @@ final class APIClient: APIClientProtocol {
         }
     }
     
-    func generateReel(jpegData: Data) async throws -> String {
+    func generateReel(imagesData: [Data]) async throws -> String {
         let url = baseURL.appendingPathComponent("/api/v1/jobs/generate-reel")
-        Log.d("⬆️ REQUEST: \(url.absoluteString) | Data: \(jpegData.count) bytes")
+        Log.d("⬆️ REQUEST: \(url.absoluteString) | Images Count: \(imagesData.count)")
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -177,13 +175,19 @@ final class APIClient: APIClientProtocol {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
-        // No text parameters, just the file
-        let body = createMultipartBody(parameters: [:],
-                                     data: jpegData,
-                                     boundary: boundary,
-                                     filename: "image.jpg",
-                                     mimeType: "image/jpeg",
-                                     fileKey: "image")
+        var body = Data()
+        let lineBreak = "\r\n"
+        
+        for (index, data) in imagesData.enumerated() {
+            body.append("--\(boundary + lineBreak)")
+            body.append("Content-Disposition: form-data; name=\"image\"; filename=\"image_\(index).jpg\"\(lineBreak)")
+            body.append("Content-Type: image/jpeg\(lineBreak + lineBreak)")
+            body.append(data)
+            body.append(lineBreak)
+        }
+        
+        body.append("--\(boundary)--\(lineBreak)")
+        
         request.httpBody = body
         
         do {
@@ -229,9 +233,6 @@ final class APIClient: APIClientProtocol {
         let statusResp = try JSONDecoder().decode(JobStatusResponse.self, from: data)
         let variants = statusResp.urls?.compactMap { URL(string: $0) } ?? []
         
-        // Log status briefly to avoid spamming full body if not needed, but User requested full logs.
-        // Pretty print handles it.
-        
         let mappedStatus: PhotoJobResult.JobStatus
         switch statusResp.status.uppercased() {
         case "COMPLETED": mappedStatus = .completed
@@ -243,13 +244,11 @@ final class APIClient: APIClientProtocol {
         return PhotoJobResult(jobId: jobId, style: nil, variants: variants, status: mappedStatus)
     }
     
-    // Backward compatibility
     func createPhotoJob(style: AuraStyle, jpegData: Data) async throws -> String {
         return try await enhanceShot(style: style.rawValue, jpegData: jpegData)
     }
     
     func pollPhotoJob(jobId: String) async throws -> PhotoJobResult? {
-        // Return nil if not completed for compat with old loop
         let result = try await getJobStatus(jobId: jobId)
         if result?.status == .completed {
             return result

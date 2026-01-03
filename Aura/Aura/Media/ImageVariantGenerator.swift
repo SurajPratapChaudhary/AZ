@@ -30,8 +30,6 @@ final class ImageVariantGenerator {
     }
 
     private func apply(preset: Preset, to image: CIImage) -> CIImage? {
-        // Mild changes (just to see 4 different outputs in UI)
-        // Real Nano backend will replace this later.
         switch preset {
         case .v1:
             return image

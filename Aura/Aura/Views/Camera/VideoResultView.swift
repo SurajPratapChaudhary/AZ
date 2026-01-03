@@ -37,7 +37,6 @@ struct VideoResultView: View {
                 Spacer()
                 
                 Button {
-                    // Share logic
                     shareVideo()
                 } label: {
                     Label("Share Video", systemImage: "square.and.arrow.up")
@@ -65,7 +64,6 @@ struct VideoResultView: View {
         player = AVPlayer(playerItem: playerItem)
         player?.play()
         
-        // Loop video
         NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: playerItem, queue: .main) { _ in
             player?.seek(to: .zero)
             player?.play()

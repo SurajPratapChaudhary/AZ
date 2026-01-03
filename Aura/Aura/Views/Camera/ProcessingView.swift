@@ -10,7 +10,6 @@ struct ProcessingView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            // Blurred background
             Image(uiImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fill)

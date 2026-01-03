@@ -93,7 +93,6 @@ final class CameraFlowViewModel: ObservableObject {
                     return
                 }
 
-                // Store for later Reel generation
                 self.bestFrameData = picked.bestJPEG
                 
                 guard let rawImage = await Task.detached(priority: .userInitiated, operation: {
@@ -117,7 +116,6 @@ final class CameraFlowViewModel: ObservableObject {
             } catch {
                 Log.e("Capture flow error: \(error.localizedDescription)")
                 progressMessage = "Error: \(error.localizedDescription)"
-                // Optionally show error alert here
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 reset()
             }
@@ -158,18 +156,50 @@ final class CameraFlowViewModel: ObservableObject {
     }
     
     func generateReel(from image: UIImage) {
-        guard let data = bestFrameData else {
-            Log.e("No best frame data found for reel")
+        guard case let .variantsReady(result, _) = state, !result.variants.isEmpty else {
+            Log.e("No variants available for reel generation")
             return
         }
         
+        let variantURLs = result.variants
+        
         Task {
             @MainActor in
-            // Stop polling or any other state
+            progressMessage = "Downloading Images..."
+            Log.d("Downloading \(variantURLs.count) variants for reel...")
+            
+            let imagesData: [Data] = await withTaskGroup(of: Data?.self) { group in
+                for url in variantURLs {
+                    group.addTask {
+                        do {
+                            let (data, _) = try await URLSession.shared.data(from: url)
+                            return data
+                        } catch {
+                            Log.e("Failed to download variant: \(url) error: \(error)")
+                            return nil
+                        }
+                    }
+                }
+                
+                var results: [Data] = []
+                for await data in group {
+                    if let data = data {
+                        results.append(data)
+                    }
+                }
+                return results
+            }
+            
+            guard !imagesData.isEmpty else {
+                progressMessage = "Failed to download images."
+                Log.e("No images downloaded successfully")
+                return
+            }
+            
             progressMessage = "Generating Reel..."
             
             do {
-                let jobId = try await apiClient.generateReel(jpegData: data)
+                let jobId = try await apiClient.generateReel(imagesData: imagesData)
                 Log.d("Reel job created id=\(jobId)")
                 state = .generatingReel(jobId: jobId, selectedImage: image)
                 
@@ -194,15 +224,12 @@ final class CameraFlowViewModel: ObservableObject {
             do {
                 if let result = try await apiClient.getJobStatus(jobId: jobId) {
                     if result.status == .completed {
-                        // Check if we have urls
                         if let videoURL = result.variants.first {
                             Log.d("Reel job completed url=\(videoURL)")
                             state = .reelReady(videoURL: videoURL)
                             return
                         } else {
                              Log.e("Reel job completed but no URLs found.")
-                             // Maybe return? Or wait? 
-                             // If completed without URL, it's virtually failed for us.
                              progressMessage = "Video generation returned no file."
                              try? await Task.sleep(nanoseconds: 2_000_000_000)
                              reset()

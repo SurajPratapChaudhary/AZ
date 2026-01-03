@@ -35,7 +35,6 @@ struct AuthView: View {
                 Spacer()
                 
                 VStack(spacing: 16) {
-                    // Apple Sign In Button
                     SignInWithAppleButton(.signIn) { request in
                         request.requestedScopes = [.fullName, .email]
                     } onCompletion: { result in
@@ -44,7 +43,6 @@ struct AuthView: View {
                     .signInWithAppleButtonStyle(.white)
                     .frame(height: 44)
                     
-                    // Google Sign In Button
                     Button {
                         handleGoogleSignIn()
                     } label: {
