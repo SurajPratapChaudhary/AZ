@@ -149,6 +149,7 @@ final class CameraFlowViewModel: ObservableObject {
     }
     
     func pollEnhanceJob(jobId: String) async {
+        guard jobId != "placeholder" else { return }
         Log.d("Polling enhance job id=\(jobId)")
         
         guard case let .enhancing(raw, id) = state, id == jobId else { return }
@@ -298,7 +299,7 @@ struct CameraFlowView: View {
 
             case .enhancing(let raw, let jobId):
                 ProcessingView(image: raw, message: vm.progressMessage)
-                    .task { await vm.pollEnhanceJob(jobId: jobId) }
+                    .task(id: jobId) { await vm.pollEnhanceJob(jobId: jobId) }
                     .transition(.opacity)
                     
             case .variantsReady(let result, let raw):

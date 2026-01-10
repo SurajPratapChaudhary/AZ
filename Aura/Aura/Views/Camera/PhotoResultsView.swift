@@ -85,23 +85,9 @@ struct PhotoResultsView: View {
     
     @ViewBuilder func MainImage() -> some View {
         if !variants.isEmpty {
-            AsyncImage(url: variants[selectedIndex]) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .ignoresSafeArea()
-                case .failure:
-                    // Fallback or Error
-                    Color.gray
-                        .overlay(Text("Failed to load").foregroundStyle(.white))
-                case .empty:
-                     ProgressView().tint(.white)
-                @unknown default:
-                    Color.gray
-                }
-            }
+            AuraImageView(url: variants[selectedIndex])
+                .aspectRatio(contentMode: .fill)
+                .ignoresSafeArea()
         } else {
             Image(uiImage: rawImage)
                 .resizable()
@@ -165,19 +151,14 @@ struct PhotoResultsView: View {
                         Button {
                             withAnimation { selectedIndex = index }
                         } label: {
-                            AsyncImage(url: variants[index]) { phase in
-                                if let image = phase.image {
-                                    image.resizable().scaledToFill()
-                                } else {
-                                    Color.gray
-                                }
-                            }
-                            .frame(width: 60, height: 60)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(selectedIndex == index ? Color("AccentColor") : Color.clear, lineWidth: 2)
-                            )
+                            AuraImageView(url: variants[index])
+                                .scaledToFill()
+                                .frame(width: 60, height: 60)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(selectedIndex == index ? Color("AccentColor") : Color.clear, lineWidth: 2)
+                                )
                         }
                     }
                 }

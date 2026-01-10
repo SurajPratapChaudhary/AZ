@@ -1,10 +1,9 @@
 import SwiftUI
 
 struct TabbarView: View {
-    @State private var selectedTab: Int = 1 // Start on Camera (Index 1)
+    @State private var selectedTab: Int = 1 
     
     init() {
-        // Customizing TabBar appearance
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = .black
@@ -37,6 +36,6 @@ struct TabbarView: View {
                 .tag(2)
         }
         .tint(Color("AccentColor"))
-        .environment(\.symbolVariants, .none) // Force outline even when selected
+        .environment(\.symbolVariants, .none)
     }
 }

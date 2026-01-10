@@ -13,29 +13,15 @@ struct StudioImageDetailView: View {
                 Spacer()
                 
                 // Image content
-                if let urlString = item.urls?.first, let url = URL(string: urlString) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .empty:
-                            ProgressView()
-                                .tint(.white)
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(maxHeight: 500)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
-                        case .failure:
-                            Image(systemName: "photo")
-                                .font(.system(size: 40))
-                                .foregroundStyle(.gray)
-                        @unknown default:
-                            EmptyView()
-                        }
-                    }
-                    .padding(.horizontal, 20)
+                // Image content
+                if let urlString = item.variants.first, let url = URL(string: urlString) {
+                    AuraImageView(url: url)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxHeight: 500)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .padding(.horizontal, 20)
                 } else {
-                    Text("No image not found")
+                    Text("No image found")
                         .foregroundStyle(.gray)
                 }
                 

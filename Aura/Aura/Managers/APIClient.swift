@@ -20,13 +20,44 @@ struct PhotoJobResult: Codable {
 }
 
 struct JobResponse: Codable {
-    let job_id: String
-    let status: String
+    let success: Bool?
+    let message: String?
+    let data: JobData?
+    
+    var job_id: String {
+        return data?.job_id ?? ""
+    }
+    
+    var status: String {
+        return data?.status ?? ""
+    }
+    
+    struct JobData: Codable {
+        let job_id: String
+        let status: String
+        let credits_remaining: Int?
+    }
 }
 
 struct JobStatusResponse: Codable {
-    let status: String
-    let urls: [String]?
+    let success: Bool?
+    let message: String?
+    let data: JobStatusData?
+    
+    struct JobStatusData: Codable {
+        let job_id: String
+        let type: String
+        let status: String
+        let output_urls: [OutputUrl]?
+        let error_message: String?
+        
+        struct OutputUrl: Codable {
+            let url: String
+            let type: String?
+            let index: Int?
+            let rank: Int?
+        }
+    }
 }
 
 struct LoginResponse: Codable {
@@ -81,19 +112,47 @@ struct StudioHistoryResponse: Codable {
     struct StudioItem: Codable, Identifiable {
         let id: String
         let type: String // "photo", "video", "mux"
-        let status: String
+        let status: String?
         let created_at: String
-        let thumbnails: [String]?
-        let urls: [String]?
+        let output_urls: [JobStatusResponse.JobStatusData.OutputUrl]?
+        let style: String?
+        
+        enum CodingKeys: String, CodingKey {
+            case id = "job_id"
+            case type
+            case status
+            case created_at
+            case output_urls
+            case style
+        }
+        
+        // Helper to get simple URL strings if needed
+        var variants: [String] {
+            return output_urls?.map { $0.url } ?? []
+        }
     }
 }
 
 // MARK: - Credits Models
 struct CreditsResponse: Codable {
-    let credits: Int
-    let transactions: [Transaction]?
+    let success: Bool?
+    let message: String?
+    let data: CreditsData?
     
-    struct Transaction: Codable {
+    var credits: Int {
+        return data?.balance ?? 0
+    }
+    
+    var transactions: [Transaction]? {
+        return data?.transactions
+    }
+    
+    struct CreditsData: Codable {
+        let balance: Int
+        let transactions: [Transaction]?
+    }
+    
+    struct Transaction: Codable, Identifiable {
         let id: String
         let amount: Int
         let type: String
@@ -200,6 +259,7 @@ final class APIClient: APIClientProtocol {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
+        // Send style as is (Enum raw value)
         let body = createMultipartBody(parameters: ["style": style],
                                      data: jpegData,
                                      boundary: boundary,
@@ -296,7 +356,28 @@ final class APIClient: APIClientProtocol {
              return nil 
         }
         
-        return try JSONDecoder().decode(PhotoJobResult.self, from: data)
+        logResponse(data, url: url.absoluteString)
+        
+        do {
+            let response = try JSONDecoder().decode(JobStatusResponse.self, from: data)
+            guard let jobData = response.data else {
+                 Log.e("❌ JobStatusResponse missing data")
+                 throw APIError.decodingError
+            }
+            
+            // Map output objects to simple URLs
+            let variants = jobData.output_urls?.compactMap { URL(string: $0.url) } ?? []
+            
+            return PhotoJobResult(
+                jobId: jobData.job_id,
+                style: nil, // API doesn't return style in status, can be nil or passed if needed
+                variants: variants,
+                status: PhotoJobResult.JobStatus(rawValue: jobData.status) ?? .failed
+            )
+        } catch {
+            Log.e("❌ Decoding Failed for JobStatus. Raw Response: \(String(data: data, encoding: .utf8) ?? "nil")")
+            throw error
+        }
     }
     
     func getStudioHistory(limit: Int = 20, offset: Int = 0) async throws -> StudioHistoryResponse {
@@ -346,7 +427,8 @@ final class APIClient: APIClientProtocol {
     // MARK: - Credits
     
     func getCredits() async throws -> CreditsResponse {
-        let url = baseURL.appendingPathComponent("/api/v1/credits")
+        let url = baseURL.appendingPathComponent("/api/v1/jobs/credits")
+        Log.d("API Get Credits: \(url.absoluteString)")
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -363,6 +445,7 @@ final class APIClient: APIClientProtocol {
             throw APIError.serverError(statusCode: httpResponse.statusCode)
         }
         
+        logResponse(data, url: url.absoluteString)
         return try JSONDecoder().decode(CreditsResponse.self, from: data)
     }
     

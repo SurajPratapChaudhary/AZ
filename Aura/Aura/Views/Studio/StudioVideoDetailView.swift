@@ -113,7 +113,7 @@ struct StudioVideoDetailView: View {
             .padding(.horizontal)
         }
         .onAppear {
-            if let urlString = item.urls?.first, let url = URL(string: urlString) {
+            if let urlString = item.variants.first, let url = URL(string: urlString) {
                 player = AVPlayer(url: url)
             }
         }

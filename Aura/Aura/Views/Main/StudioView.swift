@@ -5,7 +5,6 @@ struct StudioView: View {
     @StateObject private var vm = StudioViewModel()
     @State private var selectedItem: StudioHistoryResponse.StudioItem?
     
-    // Grid Configuration
     private let columns = [
         GridItem(.flexible(), spacing: 16),
         GridItem(.flexible(), spacing: 16)
@@ -17,7 +16,6 @@ struct StudioView: View {
                 Color.black.ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                    // Custom Header
                     Text("Studio")
                         .font(.title2)
                         .fontWeight(.semibold)
@@ -79,7 +77,7 @@ struct StudioView: View {
                                 }
                             }
                             .padding(.horizontal, 20)
-                            .padding(.bottom, 100) // Spacer for tab bar
+                            .padding(.bottom, 100)
                         }
                         .refreshable {
                             await vm.refresh()
@@ -101,7 +99,6 @@ struct StudioView: View {
             }
         }
         .task {
-            // Only fetch if empty to avoid reloading on tab switch
             if vm.items.isEmpty {
                 await vm.fetchHistory()
             }
@@ -109,34 +106,23 @@ struct StudioView: View {
     }
 }
 
-// Add Identifiable conformance extension if it's not already there, or rely on id from struct
-//extension StudioHistoryResponse.StudioItem: Identifiable {}
-
 struct StudioItemCard: View {
     let item: StudioHistoryResponse.StudioItem
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Image
             GeometryReader { geo in
-                if let urlString = item.thumbnails?.first ?? item.urls?.first, let url = URL(string: urlString) {
-                    AsyncImage(url: url) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                            .clipped()
-                    } placeholder: {
-                        Color.gray.opacity(0.2)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                    }
+                if let urlString = item.variants.first, let url = URL(string: urlString) {
+                    AuraImageView(url: url)
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
                 } else {
                     Color.gray.opacity(0.2)
                         .frame(width: geo.size.width, height: geo.size.height)
                 }
             }
             
-            // Badge
             HStack(spacing: 4) {
                 Image(systemName: item.type == "video" || item.type == "mux" ? "play.circle" : "photo")
                     .font(.system(size: 10))
@@ -149,7 +135,7 @@ struct StudioItemCard: View {
             .clipShape(Capsule())
             .padding(10)
         }
-        .frame(height: 220) // Fixed height for grid interaction
+        .frame(height: 220)
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
