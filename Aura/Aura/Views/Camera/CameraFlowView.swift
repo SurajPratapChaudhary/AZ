@@ -19,6 +19,7 @@ final class CameraFlowViewModel: ObservableObject {
     @Published var selectedStyle: AuraStyle = .luxury
     @Published var guidance: GuidanceService.State = .good
     @Published var isCapturing: Bool = false
+    @Published var captureProgress: Int = 0 // Tracks burst count
     @Published var progressMessage: String = "Processing..."
 
     let cameraService: CameraService
@@ -77,7 +78,14 @@ final class CameraFlowViewModel: ObservableObject {
 
             do {
                 Log.d("Capturing burst...")
-                let burst = try await cameraService.captureBurst(count: 10)
+                // Reset progress
+                await MainActor.run { captureProgress = 0 }
+                
+                let burst = try await cameraService.captureBurst(count: 10) { [weak self] current in
+                    Task { @MainActor in
+                        self?.captureProgress = current
+                    }
+                }
                 Log.d("Burst captured frames=\(burst.count)")
                 
                 await MainActor.run { progressMessage = "Filtering Best Shot..." }
@@ -315,16 +323,34 @@ struct CameraFlowView: View {
             
             // Overlay for initial burst capture & filtering logic
             if vm.isCapturing {
-                 Color.black.opacity(0.6).ignoresSafeArea()
+                 // Non-blocking Progress Pill
                  VStack {
-                     ProgressView()
-                         .tint(.white)
-                         .scaleEffect(1.5)
-                     Text(vm.progressMessage)
-                         .font(.headline)
-                         .foregroundStyle(.white)
-                         .padding(.top, 10)
+                     // Top area (underneath dynamic island/notch)
+                     HStack {
+                         Spacer()
+                         HStack(spacing: 8) {
+                             if vm.captureProgress < 10 {
+                                 ProgressView()
+                                     .tint(.black)
+                                     .scaleEffect(0.8)
+                             }
+                             Text(vm.captureProgress < 10 ? "Taking pictures: \(vm.captureProgress)/10" : vm.progressMessage)
+                                 .font(.system(size: 14, weight: .medium))
+                                 .foregroundStyle(.black)
+                         }
+                         .padding(.horizontal, 16)
+                         .padding(.vertical, 10)
+                         .background(Color.white.opacity(0.9))
+                         .clipShape(Capsule())
+                         .shadow(radius: 4)
+                         Spacer()
+                     }
+                     .padding(.top, 60) // Visible below top bar or overlaying top bar? user said "show which point it is somewhere on the top side"
+                     
+                     Spacer()
                  }
+                 // Do not ignore safe area so it sits nicely? 
+                 // Actually overlaying on top is fine.
             }
         }
         .animation(.easeInOut(duration: 0.4), value: vm.state.accessibilityLabel)

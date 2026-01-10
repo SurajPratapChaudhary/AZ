@@ -171,37 +171,35 @@ final class CameraService: NSObject, ObservableObject {
 
     // MARK: - Burst capture (~10 frames)
     /// Captures `count` frames as fast as possible.
-    func captureBurst(count: Int = 10) async throws -> [Data] {
+    func captureBurst(count: Int = 10, onProgress: ((Int) -> Void)? = nil) async throws -> [Data] {
         Log.d("captureBurst start count=\(count)")
         var shots: [Data] = []
         shots.reserveCapacity(count)
-
-        // Strategy: Fire sequentially but immediately.
-        // Parallel firing is risky on non-Pro devices and might cause dropped frames.
-        // We use .balanced or .speed to ensure we hit ~10fps if possible.
-        // PRD wants "Premium" so we shouldn't degrade too much, but .balanced is usually fine.
         
-        let prioritization: AVCapturePhotoOutput.QualityPrioritization = .balanced
-
+        // Use .speed for faster capture (less processing time)
+        let prioritization: AVCapturePhotoOutput.QualityPrioritization = .speed
+        
         for i in 0..<count {
             do {
-                // We await the result of each capture.
-                // To truly speed up, we'd need to fire overlapping requests, but AVCapturePhotoOutput
-                // acts as a serialization bottleneck anyway.
-                // The key optimization here is removing the explicit proper sleep and using proper error checking.
+                // We still await, but .speed makes it faster.
+                // We notify progress immediately after 'successful' capture return (which implies shutter fired + processed)
+                // For PERCEIVED speed, we might want to update UI earlier?
+                // The issue: await capturePhotoJPEG waits for DATA.
+                // But we want to show "Capturing 1/10" moving.
                 let jpeg = try await capturePhotoJPEG(prioritization: prioritization)
                 shots.append(jpeg)
+                onProgress?(i + 1)
             } catch {
                 Log.e("burst shot \(i+1)/\(count) failed: \(error.localizedDescription)")
-                // If one fails, we continue to try others to salvage the burst
+                // Continue to salvage burst
             }
         }
-
+        
         if shots.isEmpty {
             Log.e("captureBurst failed: no frames captured")
             throw NSError(domain: "AuraCamera", code: -20)
         }
-
+        
         Log.d("captureBurst end frames=\(shots.count)")
         return shots
     }
