@@ -30,9 +30,27 @@ struct JobStatusResponse: Codable {
 }
 
 struct LoginResponse: Codable {
-    let access_token: String
-    let token_type: String
-    let user: User
+    let success: Bool?
+    let message: String?
+    let data: LoginData?
+    
+    // Fallback/Direct properties for backward compatibility
+    // If the response is flat (old API), these might be used (though the API seems consistent now)
+    // Actually, to support the current usage:
+    
+    var access_token: String {
+        return data?.access_token ?? ""
+    }
+    
+    var user: User {
+        return data?.user ?? User(id: "", email: "", credits: 0)
+    }
+    
+    struct LoginData: Codable {
+        let access_token: String
+        let token_type: String
+        let user: User
+    }
     
     struct User: Codable {
         let id: String
