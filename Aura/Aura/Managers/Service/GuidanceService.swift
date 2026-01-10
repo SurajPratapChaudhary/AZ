@@ -20,6 +20,15 @@ final class GuidanceService: ObservableObject {
         case lowLight
         case unstable
         case adjustPosition
+        
+        var description: String {
+            switch self {
+            case .good: return ""
+            case .lowLight: return "More light needed"
+            case .unstable: return "Hold camera steady"
+            case .adjustPosition: return "Center subject"
+            }
+        }
     }
 
     @Published private(set) var state: State = .good

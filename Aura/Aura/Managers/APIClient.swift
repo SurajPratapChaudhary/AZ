@@ -41,6 +41,34 @@ struct LoginResponse: Codable {
     }
 }
 
+// MARK: - Studio Models
+struct StudioHistoryResponse: Codable {
+    let items: [StudioItem]
+    
+    struct StudioItem: Codable {
+        let id: String
+        let type: String // "photo", "video", "mux"
+        let status: String
+        let created_at: String
+        let thumbnails: [String]?
+        let urls: [String]?
+    }
+}
+
+// MARK: - Credits Models
+struct CreditsResponse: Codable {
+    let credits: Int
+    let transactions: [Transaction]?
+    
+    struct Transaction: Codable {
+        let id: String
+        let amount: Int
+        let type: String
+        let description: String?
+        let created_at: String
+    }
+}
+
 enum APIError: Error {
     case invalidURL
     case noData
@@ -65,8 +93,12 @@ final class APIClient: APIClientProtocol {
     private let baseURL = URL(string: "https://api.wearestellar.com")!
     private let session: URLSession
     
-    init(session: URLSession = .shared) {
-        self.session = session
+    init() {
+        let config = URLSessionConfiguration.default
+        config.waitsForConnectivity = true
+        config.timeoutIntervalForResource = 180 // Increased to 3 minutes for large uploads
+        config.timeoutIntervalForRequest = 180
+        self.session = URLSession(configuration: config)
     }
     
     // MARK: - Auth
@@ -242,6 +274,95 @@ final class APIClient: APIClientProtocol {
         }
         
         return PhotoJobResult(jobId: jobId, style: nil, variants: variants, status: mappedStatus)
+    }
+    
+    func getStudioHistory(type: String = "all", limit: Int = 20, offset: Int = 0) async throws -> StudioHistoryResponse {
+        var urlComp = URLComponents(string: baseURL.appendingPathComponent("/api/v1/jobs/studio").absoluteString)!
+        urlComp.queryItems = [
+            URLQueryItem(name: "type", value: type),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "offset", value: "\(offset)")
+        ]
+        
+        var request = URLRequest(url: urlComp.url!)
+        request.httpMethod = "GET"
+        
+        if let token = UserDefaults.standard.string(forKey: "aura.authToken") {
+             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.serverError(statusCode: (response as? HTTPURLResponse)?.statusCode ?? 500)
+        }
+        
+        logResponse(data, url: urlComp.url!.absoluteString)
+        return try JSONDecoder().decode(StudioHistoryResponse.self, from: data)
+    }
+    
+    func getCredits(includeHistory: Bool = false) async throws -> CreditsResponse {
+        var urlComp = URLComponents(string: baseURL.appendingPathComponent("/api/v1/jobs/credits").absoluteString)!
+        urlComp.queryItems = [
+            URLQueryItem(name: "include_history", value: "\(includeHistory)")
+        ]
+        
+        var request = URLRequest(url: urlComp.url!)
+        request.httpMethod = "GET"
+        
+        if let token = UserDefaults.standard.string(forKey: "aura.authToken") {
+             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.serverError(statusCode: (response as? HTTPURLResponse)?.statusCode ?? 500)
+        }
+        
+        logResponse(data, url: urlComp.url!.absoluteString)
+        return try JSONDecoder().decode(CreditsResponse.self, from: data)
+    }
+    
+    func muxMusic(videoData: Data, audioData: Data) async throws -> String {
+        let url = baseURL.appendingPathComponent("/api/v1/jobs/mux-music")
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        
+        let boundary = "Boundary-\(UUID().uuidString)"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        
+        if let token = UserDefaults.standard.string(forKey: "aura.authToken") {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        var body = Data()
+        let lineBreak = "\r\n"
+        
+        // Video
+        body.append("--\(boundary + lineBreak)")
+        body.append("Content-Disposition: form-data; name=\"video\"; filename=\"video.mp4\"\(lineBreak)")
+        body.append("Content-Type: video/mp4\(lineBreak + lineBreak)")
+        body.append(videoData)
+        body.append(lineBreak)
+        
+        // Audio
+        body.append("--\(boundary + lineBreak)")
+        body.append("Content-Disposition: form-data; name=\"audio\"; filename=\"audio.mp3\"\(lineBreak)")
+        body.append("Content-Type: audio/mpeg\(lineBreak + lineBreak)")
+        body.append(audioData)
+        body.append(lineBreak)
+        
+        body.append("--\(boundary)--\(lineBreak)")
+        request.httpBody = body
+        
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.serverError(statusCode: (response as? HTTPURLResponse)?.statusCode ?? 500)
+        }
+        
+        logResponse(data, url: url.absoluteString)
+        let jobResponse = try JSONDecoder().decode(JobResponse.self, from: data)
+        return jobResponse.job_id
     }
     
     func createPhotoJob(style: AuraStyle, jpegData: Data) async throws -> String {

@@ -13,86 +13,191 @@ struct PhotoResultsView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            VStack(spacing: 0) {
-                HStack {
-                    Button(action: onRetake) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.white)
-                            .padding(12)
-                            .background(Color.white.opacity(0.2))
-                            .clipShape(Circle())
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal)
-                .padding(.top, 60)
-                
+            MainImage()
+            
+            VStack(alignment: .leading, spacing: 16) {
                 Spacer()
                 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    ForEach(0..<min(variants.count, 4), id: \.self) { index in
-                        AsyncImage(url: variants[index]) { phase in
-                            switch phase {
-                            case .empty:
-                                ZStack {
-                                    Color.gray.opacity(0.2)
-                                    ProgressView()
-                                        .tint(.white)
-                                }
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            case .failure(let error):
-                                let _ = print("❌ Error loading image: \(variants[index]) desc: \(error.localizedDescription)")
-                                Color.red.opacity(0.3)
-                                    .overlay(
-                                        Text("Failed")
-                                            .font(.caption)
-                                            .foregroundStyle(.white)
-                                    )
-                            @unknown default:
-                                Color.gray
-                            }
-                        }
-                        .onAppear { Log.d("Loading variant: \(variants[index])") }
-                        .frame(height: 250)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(selectedIndex == index ? Color.white : Color.clear, lineWidth: 3)
-                        )
-                        .onTapGesture {
-                            withAnimation {
-                                selectedIndex = index
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal)
-                
-                Spacer()
-                
-                // Bottom Actions
-                Button {
-                    onCreateReel(rawImage)
-                    
-                } label: {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Handle
                     HStack {
-                        Image(systemName: "film")
-                        Text("Create Video Reel")
+                        Spacer()
+                        Capsule()
+                            .fill(Color.gray.opacity(0.5))
+                            .frame(width: 40, height: 4)
+                        Spacer()
                     }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.black)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 28))
+                    .padding(.top, 10)
+                    
+                    Text("Enhanced")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .padding(.leading, 20)
+                    
+                    Text("Your photo was upgraded")
+                        .font(.subheadline)
+                        .foregroundStyle(.gray)
+                        .padding(.leading, 20)
+                    
+                    ThumbNails()
+                    
+                    CreateReelButton()
+                    
+                    SaveAndShareButtons()
+                    
+                    RetakeButton()
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 34)
+                .background(Color.black.opacity(0.8))
+                .clipShape(RoundedRectangle(cornerRadius: 24))
+                .padding(.bottom, -30)
             }
         }
+        .safeAreaInset(edge: .top, content: Header)
+    }
+    
+    @ViewBuilder func Header() -> some View {
+        VStack {
+            HStack {
+                Button(action: onRetake) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(12)
+                        .background(Color.black.opacity(0.3))
+                        .clipShape(Circle())
+                }
+                
+                Spacer()
+                
+                Text("Post Preview")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                
+                Spacer()
+                
+                Color.clear.frame(width: 44, height: 44)
+            }
+            .padding(.horizontal)
+            
+            Spacer()
+        }
+    }
+    
+    @ViewBuilder func MainImage() -> some View {
+        if !variants.isEmpty {
+            AsyncImage(url: variants[selectedIndex]) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .ignoresSafeArea()
+                case .failure:
+                    // Fallback or Error
+                    Color.gray
+                        .overlay(Text("Failed to load").foregroundStyle(.white))
+                case .empty:
+                     ProgressView().tint(.white)
+                @unknown default:
+                    Color.gray
+                }
+            }
+        } else {
+            Image(uiImage: rawImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .ignoresSafeArea()
+        }
+    }
+    
+    @ViewBuilder func RetakeButton() -> some View {
+        Button {
+            onRetake()
+        } label: {
+            Text("Try Another Style")
+                .font(.system(size: 14))
+                .foregroundStyle(.gray)
+                .padding(.top, 8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, 10)
+    }
+    
+    @ViewBuilder func SaveAndShareButtons() -> some View {
+        HStack(spacing: 12) {
+            Button {
+                // Save logic
+            } label: {
+                Label("Save", systemImage: "arrow.down")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(Color.white.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 25))
+            }
+            
+            Button {
+                // Share logic
+            } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(Color.white.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 25))
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    @ViewBuilder func ThumbNails() -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Thumbnails")
+                .font(.caption)
+                .foregroundStyle(.gray)
+                .padding(.leading, 20)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(0..<variants.count, id: \.self) { index in
+                        Button {
+                            withAnimation { selectedIndex = index }
+                        } label: {
+                            AsyncImage(url: variants[index]) { phase in
+                                if let image = phase.image {
+                                    image.resizable().scaledToFill()
+                                } else {
+                                    Color.gray
+                                }
+                            }
+                            .frame(width: 60, height: 60)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(selectedIndex == index ? Color("AccentColor") : Color.clear, lineWidth: 2)
+                            )
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+    
+    @ViewBuilder func CreateReelButton() -> some View {
+        Button {
+            onCreateReel(rawImage)
+        } label: {
+            Text("Create 8 Reel")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.black)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .background(Color("AccentColor"))
+                .clipShape(RoundedRectangle(cornerRadius: 28))
+        }
+        .padding(.horizontal, 20)
     }
 }

@@ -6,8 +6,9 @@ import AVFoundation
 
 @MainActor
 final class CameraFlowViewModel: ObservableObject {
-    enum State {
+    enum State: Equatable {
         case camera
+        case mediaCaptured(image: UIImage) // New intermediate state
         case enhancing(rawPreview: UIImage, jobId: String)
         case variantsReady(PhotoJobResult, rawPreview: UIImage)
         case generatingReel(jobId: String, selectedImage: UIImage)
@@ -66,7 +67,7 @@ final class CameraFlowViewModel: ObservableObject {
         guard !isCapturing else { return }
         isCapturing = true
         progressMessage = "Capturing..."
-        Log.d("Shutter tapped. style=\(selectedStyle.rawValue)")
+        Log.d("Shutter tapped.")
 
         Task {
             defer {
@@ -102,16 +103,9 @@ final class CameraFlowViewModel: ObservableObject {
                     return
                 }
                 
-                await MainActor.run { progressMessage = "Enhancing Shot..." }
-
-                Log.d("Enhancing shot...")
-                // Stop camera while processing to save resources
+                // Stop camera and move to Preview/Style Select state
                 await cameraService.stop()
-                
-                let jobId = try await apiClient.enhanceShot(style: selectedStyle.rawValue, jpegData: picked.bestJPEG)
-
-                Log.d("Enhance job created id=\(jobId)")
-                state = .enhancing(rawPreview: rawImage, jobId: jobId)
+                state = .mediaCaptured(image: rawImage)
                 
             } catch {
                 Log.e("Capture flow error: \(error.localizedDescription)")
@@ -119,6 +113,30 @@ final class CameraFlowViewModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 reset()
             }
+        }
+    }
+    
+    func startEnhancement(style: AuraStyle) {
+        guard case let .mediaCaptured(rawImage) = state, let jpegData = bestFrameData else {
+            Log.e("Cannot start enhancement: wrong state or no data")
+            return
+        }
+        
+        Task {
+             progressMessage = "Enhancing Shot..."
+             Log.d("Enhancing shot with style: \(style.rawValue)")
+             state = .enhancing(rawPreview: rawImage, jobId: "placeholder") // Temp state to show loading immediately
+             
+             do {
+                 let jobId = try await apiClient.enhanceShot(style: style.rawValue, jpegData: jpegData)
+                 Log.d("Enhance job created id=\(jobId)")
+                 state = .enhancing(rawPreview: rawImage, jobId: jobId)
+             } catch {
+                 Log.e("Enhance request failed: \(error)")
+                 progressMessage = "Failed to start enhancement."
+                 try? await Task.sleep(nanoseconds: 2_000_000_000)
+                 state = .mediaCaptured(image: rawImage) // Go back to selection
+             }
         }
     }
     
@@ -262,6 +280,14 @@ struct CameraFlowView: View {
                 CameraView(vm: vm)
                     .transition(.opacity)
                 
+            case .mediaCaptured(let image):
+                StyleSelectionView(image: image, onBack: {
+                    vm.reset()
+                }, onUpgrade: { style in
+                    vm.startEnhancement(style: style)
+                })
+                .transition(.opacity)
+
             case .enhancing(let raw, let jobId):
                 ProcessingView(image: raw, message: vm.progressMessage)
                     .task { await vm.pollEnhanceJob(jobId: jobId) }
@@ -321,6 +347,7 @@ extension CameraFlowViewModel.State {
     var accessibilityLabel: String {
         switch self {
         case .camera: return "camera"
+        case .mediaCaptured: return "mediaCaptured"
         case .enhancing: return "enhancing"
         case .variantsReady: return "variantsReady"
         case .generatingReel: return "generatingReel"
@@ -329,10 +356,12 @@ extension CameraFlowViewModel.State {
     }
 }
 
-extension CameraFlowViewModel.State: Equatable {
+extension CameraFlowViewModel.State {
     static func == (lhs: CameraFlowViewModel.State, rhs: CameraFlowViewModel.State) -> Bool {
         switch (lhs, rhs) {
         case (.camera, .camera):
+            return true
+        case (.mediaCaptured, .mediaCaptured):
             return true
         case (.enhancing(_, let id1), .enhancing(_, let id2)):
             return id1 == id2
