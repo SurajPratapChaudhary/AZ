@@ -139,3 +139,7 @@ struct StudioItemCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
+
+#Preview {
+    StudioView()
+}

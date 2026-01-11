@@ -43,3 +43,7 @@ struct ProcessingView: View {
         }
     }
 }
+
+#Preview {
+    ProcessingView(image: UIImage(), message: "Filtering...")
+}

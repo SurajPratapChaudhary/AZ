@@ -101,3 +101,7 @@ struct StudioMusicSheet: View {
         }
     }
 }
+
+#Preview {
+    StudioMusicSheet()
+}

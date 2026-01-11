@@ -139,3 +139,7 @@ struct ProfileMenuCell: View {
         )
     }
 }
+
+#Preview {
+    ProfileView()
+}

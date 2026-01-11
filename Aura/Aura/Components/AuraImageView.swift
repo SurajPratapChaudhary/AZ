@@ -97,3 +97,13 @@ struct AuraImageView: View {
         }
     }
 }
+
+#Preview {
+    VStack(spacing: 20) {
+        AuraImageView(url: URL(string: "https://via.placeholder.com/150"))
+            .frame(width: 150, height: 150)
+        
+        AuraImageView(url: nil)
+            .frame(width: 150, height: 150)
+    }
+}

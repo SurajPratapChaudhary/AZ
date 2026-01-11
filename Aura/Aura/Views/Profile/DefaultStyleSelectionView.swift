@@ -96,3 +96,7 @@ struct StyleOptionRow: View {
         .buttonStyle(.plain)
     }
 }
+
+#Preview {
+    DefaultStyleSelectionView(viewModel: ProfileViewModel())
+}

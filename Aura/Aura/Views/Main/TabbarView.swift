@@ -39,3 +39,7 @@ struct TabbarView: View {
         .environment(\.symbolVariants, .none)
     }
 }
+
+#Preview {
+    TabbarView()
+}

@@ -124,3 +124,13 @@ struct CameraView: View {
         .background(Color.black)
     }
 }
+
+#Preview {
+    @MainActor func makeVM() -> CameraFlowViewModel {
+        let vm = CameraFlowViewModel()
+        vm.guidance = .lowLight
+        return vm
+    }
+    
+    return CameraView(vm: makeVM())
+}

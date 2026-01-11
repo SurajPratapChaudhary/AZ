@@ -129,3 +129,18 @@ struct StudioVideoDetailView: View {
         .navigationBarHidden(true)
     }
 }
+
+#Preview {
+    let mockItem = StudioHistoryResponse.StudioItem(
+        id: "mockVideo",
+        type: "video",
+        status: "completed",
+        created_at: "2024-01-01",
+        output_urls: [
+            JobStatusResponse.JobStatusData.OutputUrl(url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", type: "video", index: 0, rank: 0)
+        ],
+        style: "Cinematic"
+    )
+    
+    StudioVideoDetailView(item: mockItem, onBack: {})
+}

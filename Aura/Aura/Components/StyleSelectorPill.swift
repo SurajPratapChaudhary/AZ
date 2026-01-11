@@ -32,3 +32,10 @@ struct StyleSelectorPill: View {
         }
     }
 }
+
+#Preview {
+    ZStack {
+        Color.black
+        StyleSelectorPill(selected: .constant(.luxury))
+    }
+}

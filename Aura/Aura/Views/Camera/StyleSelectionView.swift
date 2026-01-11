@@ -156,3 +156,7 @@ struct StyleOptionCard: View {
         .padding(.vertical, 4)
     }
 }
+
+#Preview {
+    StyleSelectionView(image: UIImage(), onBack: {}, onUpgrade: { _ in })
+}

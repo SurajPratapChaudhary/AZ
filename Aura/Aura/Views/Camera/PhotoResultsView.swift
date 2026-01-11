@@ -182,3 +182,15 @@ struct PhotoResultsView: View {
         .padding(.horizontal, 20)
     }
 }
+
+#Preview {
+    PhotoResultsView(
+        rawImage: UIImage(),
+        variants: [
+            URL(string: "https://via.placeholder.com/300")!,
+            URL(string: "https://via.placeholder.com/300/0000FF")!
+        ],
+        onRetake: {},
+        onCreateReel: { _ in }
+    )
+}

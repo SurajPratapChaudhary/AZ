@@ -403,3 +403,7 @@ extension CameraFlowViewModel.State {
         }
     }
 }
+
+#Preview {
+    CameraFlowView()
+}

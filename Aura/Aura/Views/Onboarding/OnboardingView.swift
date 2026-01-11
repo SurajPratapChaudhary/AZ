@@ -55,3 +55,7 @@ struct OnboardingView: View {
         .task { await permissionManager.refresh() }
     }
 }
+
+#Preview {
+    OnboardingView()
+}

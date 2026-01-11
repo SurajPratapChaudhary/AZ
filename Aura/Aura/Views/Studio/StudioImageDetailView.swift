@@ -130,3 +130,18 @@ struct StudioImageDetailView: View {
         .navigationBarHidden(true)
     }
 }
+
+#Preview {
+    let mockItem = StudioHistoryResponse.StudioItem(
+        id: "mock1",
+        type: "photo",
+        status: "completed",
+        created_at: "2024-01-01",
+        output_urls: [
+            JobStatusResponse.JobStatusData.OutputUrl(url: "https://via.placeholder.com/500", type: "upscaled", index: 0, rank: 0)
+        ],
+        style: "Luxury"
+    )
+    
+    return StudioImageDetailView(item: mockItem, onBack: {})
+}

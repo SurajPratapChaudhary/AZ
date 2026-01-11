@@ -53,3 +53,10 @@ struct SafeFrameOverlay: View {
         .ignoresSafeArea(.all, edges: .all) // Use GeometryReader full bounds, frame logic handles inset
     }
 }
+
+#Preview {
+    ZStack {
+        Color.black
+        SafeFrameOverlay()
+    }
+}

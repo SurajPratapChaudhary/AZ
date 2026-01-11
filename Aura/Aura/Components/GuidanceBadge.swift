@@ -59,3 +59,15 @@ struct GuidanceBadge: View {
         .opacity(state == .good ? 0.0 : 1.0)
     }
 }
+
+#Preview {
+    ZStack {
+        Color.black
+        VStack(spacing: 20) {
+            GuidanceBadge(state: .good)
+            GuidanceBadge(state: .lowLight)
+            GuidanceBadge(state: .unstable)
+            GuidanceBadge(state: .adjustPosition)
+        }
+    }
+}

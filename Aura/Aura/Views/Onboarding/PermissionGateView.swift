@@ -169,3 +169,7 @@ struct PermissionRow: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
+
+#Preview {
+    PermissionGateView(onComplete: {})
+}

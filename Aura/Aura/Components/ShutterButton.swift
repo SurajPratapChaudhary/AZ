@@ -21,3 +21,10 @@ struct ShutterButton: View {
         .buttonStyle(.plain)
     }
 }
+
+#Preview {
+    ZStack {
+        Color.black
+        ShutterButton(action: {})
+    }
+}

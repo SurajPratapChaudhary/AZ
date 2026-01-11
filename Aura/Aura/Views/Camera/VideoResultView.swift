@@ -240,3 +240,10 @@ struct MusicSelectionView: View {
         }
     }
 }
+
+#Preview {
+    VideoResultView(
+        videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")!,
+        onBack: {}
+    )
+}

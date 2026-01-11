@@ -146,3 +146,7 @@ struct CreditOptionCard: View {
         )
     }
 }
+
+#Preview {
+    BuyCreditsView()
+}
