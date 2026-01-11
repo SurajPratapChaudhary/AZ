@@ -274,8 +274,14 @@ final class APIClient: APIClientProtocol {
             guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 500
                 Log.e("❌ API enhanceShot failed: \(statusCode)")
+                
+                var errorMessage: String?
+                if let errorJson = try? JSONDecoder().decode(JobResponse.self, from: data) {
+                    errorMessage = errorJson.message
+                }
+                
                 logResponse(data, url: url.absoluteString)
-                throw APIError.serverError(statusCode: statusCode)
+                throw APIError.serverError(statusCode: statusCode, message: errorMessage)
             }
             
             logResponse(data, url: url.absoluteString)

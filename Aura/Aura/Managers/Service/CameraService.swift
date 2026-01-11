@@ -130,7 +130,6 @@ final class CameraService: NSObject, ObservableObject {
 
     // MARK: - Photo capture (single)
     func capturePhotoJPEG(prioritization: AVCapturePhotoOutput.QualityPrioritization = .balanced) async throws -> Data {
-        // Ensure session is running
         guard session.isRunning else {
             Log.e("capturePhotoJPEG called while session not running")
             throw NSError(domain: "AuraCamera", code: -10)
@@ -138,7 +137,6 @@ final class CameraService: NSObject, ObservableObject {
 
         let captureId = nextId()
 
-        return try await withCheckedThrowingContinuation { cont in
         return try await withCheckedThrowingContinuation { cont in
             let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
             if self.photoOutput.maxPhotoDimensions.width > 0 {

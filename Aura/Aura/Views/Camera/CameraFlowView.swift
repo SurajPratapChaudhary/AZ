@@ -140,12 +140,24 @@ final class CameraFlowViewModel: ObservableObject {
                  let jobId = try await apiClient.enhanceShot(style: style.rawValue, jpegData: jpegData)
                  Log.d("Enhance job created id=\(jobId)")
                  state = .enhancing(rawPreview: rawImage, jobId: jobId)
-             } catch {
-                 Log.e("Enhance request failed: \(error)")
-                 progressMessage = "Failed to start enhancement."
-                 try? await Task.sleep(nanoseconds: 2_000_000_000)
-                 state = .mediaCaptured(image: rawImage)
-             }
+            } catch {
+                Log.e("Enhance request failed: \(error)")
+                progressMessage = "Failed to start enhancement."
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                
+                if let apiError = error as? APIError, case let .serverError(code, msg) = apiError {
+                     if code == 402 {
+                         errorMessage = msg ?? "Insufficient credits."
+                     } else {
+                         errorMessage = msg ?? "Server error: \(code)"
+                     }
+                } else {
+                    errorMessage = error.localizedDescription
+                }
+                
+                showErrorAlert = true
+                state = .mediaCaptured(image: rawImage)
+            }
         }
     }
     
