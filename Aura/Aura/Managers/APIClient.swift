@@ -10,6 +10,7 @@ struct PhotoJobResult: Codable {
     let style: AuraStyle?
     let variants: [URL]
     let status: JobStatus
+    let errorMessage: String?
     
     enum JobStatus: String, Codable {
         case processing = "PROCESSING"
@@ -165,7 +166,7 @@ enum APIError: Error {
     case invalidURL
     case noData
     case decodingError
-    case serverError(statusCode: Int)
+    case serverError(statusCode: Int, message: String? = nil)
     case unknown
     case loginFailed(String)
 }
@@ -323,7 +324,19 @@ final class APIClient: APIClientProtocol {
             guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 500
                 Log.e("❌ API generateReel failed: \(statusCode)")
+                
+                // Try to extract error message
+                var errorMessage: String?
+                if let errorJson = try? JSONDecoder().decode(JobResponse.self, from: data) {
+                    errorMessage = errorJson.message
+                }
+                
                 logResponse(data, url: url.absoluteString)
+                
+                // If we have a message, use a custom error or append to serverError
+                // For now, let's use a new case or just pass it via userInfo if we could, 
+                // but simplest is to throw a specific error if we can change APIError.
+                // Let's modify APIError to include message in serverError
                 throw APIError.serverError(statusCode: statusCode)
             }
             
@@ -372,7 +385,8 @@ final class APIClient: APIClientProtocol {
                 jobId: jobData.job_id,
                 style: nil, // API doesn't return style in status, can be nil or passed if needed
                 variants: variants,
-                status: PhotoJobResult.JobStatus(rawValue: jobData.status) ?? .failed
+                status: PhotoJobResult.JobStatus(rawValue: jobData.status) ?? .failed,
+                errorMessage: jobData.error_message
             )
         } catch {
             Log.e("❌ Decoding Failed for JobStatus. Raw Response: \(String(data: data, encoding: .utf8) ?? "nil")")
@@ -442,7 +456,7 @@ final class APIClient: APIClientProtocol {
         guard let httpResponse = response as? HTTPURLResponse else { throw APIError.unknown }
         
         if !(200...299).contains(httpResponse.statusCode) {
-            throw APIError.serverError(statusCode: httpResponse.statusCode)
+            throw APIError.serverError(statusCode: httpResponse.statusCode, message: nil)
         }
         
         logResponse(data, url: url.absoluteString)

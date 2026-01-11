@@ -1,5 +1,5 @@
-
 import SwiftUI
+import AVFoundation
 
 struct StudioView: View {
     @StateObject private var vm = StudioViewModel()
@@ -113,10 +113,17 @@ struct StudioItemCard: View {
         ZStack(alignment: .topLeading) {
             GeometryReader { geo in
                 if let urlString = item.variants.first, let url = URL(string: urlString) {
-                    AuraImageView(url: url)
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
+                    if item.type == "video" || item.type == "mux" {
+                         VideoThumbnailView(videoURL: url)
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .clipped()
+                    } else {
+                        AuraImageView(url: url)
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .clipped()
+                    }
                 } else {
                     Color.gray.opacity(0.2)
                         .frame(width: geo.size.width, height: geo.size.height)
@@ -137,6 +144,47 @@ struct StudioItemCard: View {
         }
         .frame(height: 220)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+struct VideoThumbnailView: View {
+    let videoURL: URL
+    @State private var thumbnail: UIImage?
+    
+    var body: some View {
+        Group {
+            if let image = thumbnail {
+                Image(uiImage: image)
+                    .resizable()
+            } else {
+                ZStack {
+                    Color.black.opacity(0.8)
+                    ProgressView()
+                        .tint(.white)
+                }
+            }
+        }
+        .task {
+            if thumbnail == nil {
+                await generateThumbnail()
+            }
+        }
+    }
+    
+    private func generateThumbnail() async {
+        let asset = AVAsset(url: videoURL)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        
+        do {
+            let time = CMTime(seconds: 0.0, preferredTimescale: 600)
+            let (cgImage, _) = try await generator.image(at: time)
+            await MainActor.run {
+                self.thumbnail = UIImage(cgImage: cgImage)
+            }
+        } catch {
+            print("Failed to generate thumbnail: \(error)")
+        }
     }
 }
 
