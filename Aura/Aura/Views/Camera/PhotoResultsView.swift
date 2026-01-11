@@ -19,7 +19,6 @@ struct PhotoResultsView: View {
                 Spacer()
                 
                 VStack(alignment: .leading, spacing: 12) {
-                    // Handle
                     HStack {
                         Spacer()
                         Capsule()
@@ -47,9 +46,10 @@ struct PhotoResultsView: View {
                     
                     RetakeButton()
                 }
+                .padding(.bottom)
                 .background(Color.black.opacity(0.8))
                 .clipShape(RoundedRectangle(cornerRadius: 24))
-                .padding(.bottom, -30)
+                .padding(.bottom, -40)
             }
         }
         .safeAreaInset(edge: .top, content: Header)
@@ -112,7 +112,7 @@ struct PhotoResultsView: View {
     @ViewBuilder func SaveAndShareButtons() -> some View {
         HStack(spacing: 12) {
             Button {
-                // Save logic
+                //TODO: Save logic
             } label: {
                 Label("Save", systemImage: "arrow.down")
                     .font(.system(size: 16, weight: .medium))
@@ -124,7 +124,7 @@ struct PhotoResultsView: View {
             }
             
             Button {
-                // Share logic
+                //TODO: Share logic
             } label: {
                 Label("Share", systemImage: "square.and.arrow.up")
                     .font(.system(size: 16, weight: .medium))
@@ -157,8 +157,9 @@ struct PhotoResultsView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .stroke(selectedIndex == index ? Color("AccentColor") : Color.clear, lineWidth: 2)
+                                        .stroke(selectedIndex == index ? Color("AccentColor") : Color.clear, lineWidth: 3)
                                 )
+                                .padding(.vertical, 4)
                         }
                     }
                 }

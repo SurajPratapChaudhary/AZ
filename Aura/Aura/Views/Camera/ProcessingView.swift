@@ -10,21 +10,19 @@ struct ProcessingView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            // Blurred Background
             Image(uiImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea()
-                .blur(radius: 30) // Darker/Stronger blur
-                .overlay(Color.black.opacity(0.4)) // Darken/Tint
+                .blur(radius: 30)
+                .overlay(Color.black.opacity(0.4))
             
-            // Text Content - Bottom Aligned
             VStack(spacing: 8) {
                 Spacer()
                 
                 Text("Trying a new look...")
-                    .font(.system(size: 20, weight: .bold)) // Larger
+                    .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .opacity(isAnimating ? 0.6 : 1.0)
@@ -32,9 +30,9 @@ struct ProcessingView: View {
                 
                 Text("This uses credits.")
                     .font(.system(size: 14))
-                    .foregroundStyle(.gray) // Subtitle style
+                    .foregroundStyle(.gray)
                 
-                Spacer().frame(height: 100) // Approximate bottom padding from screenshot
+                Spacer().frame(height: 100) 
             }
             .padding(.horizontal, 40)
         }

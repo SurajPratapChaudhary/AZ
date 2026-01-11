@@ -144,14 +144,12 @@ struct StyleOptionCard: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(4)
-                .background(Color.black.opacity(0.4))
-                .clipShape(RoundedRectangle(cornerRadius: 4))
         }
         .frame(width: 80, height: 80)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(isSelected ? Color("AccentColor") : Color.clear, lineWidth: 2)
+                .stroke(isSelected ? Color("AccentColor") : Color.clear, lineWidth: 3)
         )
         .padding(.vertical, 4)
     }

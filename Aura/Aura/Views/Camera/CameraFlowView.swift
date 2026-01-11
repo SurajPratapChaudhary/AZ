@@ -8,7 +8,7 @@ import AVFoundation
 final class CameraFlowViewModel: ObservableObject {
     enum State: Equatable {
         case camera
-        case mediaCaptured(image: UIImage) // New intermediate state
+        case mediaCaptured(image: UIImage) 
         case enhancing(rawPreview: UIImage, jobId: String)
         case variantsReady(PhotoJobResult, rawPreview: UIImage)
         case generatingReel(jobId: String, selectedImage: UIImage)
@@ -19,7 +19,7 @@ final class CameraFlowViewModel: ObservableObject {
     @Published var selectedStyle: AuraStyle = .luxury
     @Published var guidance: GuidanceService.State = .good
     @Published var isCapturing: Bool = false
-    @Published var captureProgress: Int = 0 // Tracks burst count
+    @Published var captureProgress: Int = 0
     @Published var progressMessage: String = "Processing..."
 
     let cameraService: CameraService
@@ -27,7 +27,6 @@ final class CameraFlowViewModel: ObservableObject {
     private let selector = BestFrameSelector()
     private let guidanceService = GuidanceService()
     
-    // Store original best frame data for Reel generation
     private var bestFrameData: Data?
 
     init(cameraService: CameraService = CameraService(), apiClient: APIClientProtocol = APIClient()) {
@@ -322,11 +321,8 @@ struct CameraFlowView: View {
                 .transition(.opacity)
             }
             
-            // Overlay for initial burst capture & filtering logic
             if vm.isCapturing {
-                 // Non-blocking Progress Pill
                  VStack {
-                     // Top area (underneath dynamic island/notch)
                      HStack {
                          Spacer()
                          HStack(spacing: 8) {
@@ -346,12 +342,10 @@ struct CameraFlowView: View {
                          .shadow(radius: 4)
                          Spacer()
                      }
-                     .padding(.top, 60) // Visible below top bar or overlaying top bar? user said "show which point it is somewhere on the top side"
+                     .padding(.top, 60)
                      
                      Spacer()
                  }
-                 // Do not ignore safe area so it sits nicely? 
-                 // Actually overlaying on top is fine.
             }
         }
         .animation(.easeInOut(duration: 0.4), value: vm.state.accessibilityLabel)
@@ -369,7 +363,6 @@ struct CameraFlowView: View {
     }
 }
 
-// Helper for animation value
 extension CameraFlowViewModel.State {
     var accessibilityLabel: String {
         switch self {
