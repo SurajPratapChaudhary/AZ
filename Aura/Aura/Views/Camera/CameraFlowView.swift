@@ -134,7 +134,7 @@ final class CameraFlowViewModel: ObservableObject {
         Task {
              progressMessage = "Enhancing Shot..."
              Log.d("Enhancing shot with style: \(style.rawValue)")
-             state = .enhancing(rawPreview: rawImage, jobId: "placeholder") // Temp state to show loading immediately
+             state = .enhancing(rawPreview: rawImage, jobId: "placeholder")
              
              do {
                  let jobId = try await apiClient.enhanceShot(style: style.rawValue, jpegData: jpegData)
@@ -144,7 +144,7 @@ final class CameraFlowViewModel: ObservableObject {
                  Log.e("Enhance request failed: \(error)")
                  progressMessage = "Failed to start enhancement."
                  try? await Task.sleep(nanoseconds: 2_000_000_000)
-                 state = .mediaCaptured(image: rawImage) // Go back to selection
+                 state = .mediaCaptured(image: rawImage)
              }
         }
     }
@@ -155,8 +155,9 @@ final class CameraFlowViewModel: ObservableObject {
         
         guard case let .enhancing(raw, id) = state, id == jobId else { return }
         
-        // 1-3 seconds polling suggested by user
-        let pollInterval: UInt64 = 2_000_000_000 // 2 seconds
+        guard case let .enhancing(raw, id) = state, id == jobId else { return }
+        
+        let pollInterval: UInt64 = 2_000_000_000
         
         while true {
             guard case .enhancing = state else { return }
@@ -170,7 +171,7 @@ final class CameraFlowViewModel: ObservableObject {
                     } else if result.status == .failed {
                         Log.e("Enhance job failed")
                         progressMessage = "Enhancement failed."
-                        try? await Task.sleep(nanoseconds: 500_000_000) // Short delay
+                        try? await Task.sleep(nanoseconds: 500_000_000)
                         errorMessage = result.errorMessage ?? "Unknown error occurred."
                         showErrorAlert = true
                         reset()
@@ -198,7 +199,6 @@ final class CameraFlowViewModel: ObservableObject {
         
         Task {
             @MainActor in
-            // IMMEDIATE LOADING: Transition to generatingReel with placeholder to show UI
             state = .generatingReel(jobId: "placeholder", selectedImage: image)
             progressMessage = "Downloading Images..."
             Log.d("Downloading \(variantURLs.count) variants for reel...")
@@ -229,7 +229,7 @@ final class CameraFlowViewModel: ObservableObject {
                 progressMessage = "Failed to download images."
                 Log.e("No images downloaded successfully")
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
-                 // Restore previous state
+                
                 state = .variantsReady(savedResult, rawPreview: savedRaw)
                 showErrorAlert = true
                 errorMessage = "Failed to download images. check internet."
@@ -241,7 +241,6 @@ final class CameraFlowViewModel: ObservableObject {
             do {
                 let jobId = try await apiClient.generateReel(imagesData: imagesData)
                 Log.d("Reel job created id=\(jobId)")
-                // Update with real ID
                 state = .generatingReel(jobId: jobId, selectedImage: image)
                 
             } catch {
@@ -249,7 +248,6 @@ final class CameraFlowViewModel: ObservableObject {
                 progressMessage = "Failed to start video generation."
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 
-                // Extract error message
                 if let apiError = error as? APIError, case let .serverError(code, msg) = apiError {
                      if code == 402 {
                          errorMessage = msg ?? "Insufficient credits."
@@ -261,7 +259,6 @@ final class CameraFlowViewModel: ObservableObject {
                 }
                 
                 showErrorAlert = true
-                // RESTORE PREVIOUS STATE
                 state = .variantsReady(savedResult, rawPreview: savedRaw)
             }
         }
@@ -272,7 +269,8 @@ final class CameraFlowViewModel: ObservableObject {
         
         guard case .generatingReel = state else { return }
         
-        // 4-6 seconds polling suggested by user
+        guard case .generatingReel = state else { return }
+        
         let pollInterval: UInt64 = 5_000_000_000 
         
         while true {

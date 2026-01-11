@@ -67,8 +67,6 @@ struct LoginResponse: Codable {
     let data: LoginData?
     
     // Fallback/Direct properties for backward compatibility
-    // If the response is flat (old API), these might be used (though the API seems consistent now)
-    // Actually, to support the current usage:
     
     var access_token: String {
         return data?.access_token ?? ""
@@ -180,7 +178,7 @@ protocol APIClientProtocol {
     func getCredits() async throws -> CreditsResponse
     func muxMusic(audioUrl: URL, videoUrl: URL) async throws -> URL
     
-    // Kept for backward compatibility if needed, but implementation will use enhanceShot
+    // Kept for backward compatibility
     func createPhotoJob(style: AuraStyle, jpegData: Data) async throws -> String
     func pollPhotoJob(jobId: String) async throws -> PhotoJobResult?
 }
@@ -333,10 +331,6 @@ final class APIClient: APIClientProtocol {
                 
                 logResponse(data, url: url.absoluteString)
                 
-                // If we have a message, use a custom error or append to serverError
-                // For now, let's use a new case or just pass it via userInfo if we could, 
-                // but simplest is to throw a specific error if we can change APIError.
-                // Let's modify APIError to include message in serverError
                 throw APIError.serverError(statusCode: statusCode)
             }
             
@@ -383,7 +377,7 @@ final class APIClient: APIClientProtocol {
             
             return PhotoJobResult(
                 jobId: jobData.job_id,
-                style: nil, // API doesn't return style in status, can be nil or passed if needed
+                style: nil,
                 variants: variants,
                 status: PhotoJobResult.JobStatus(rawValue: jobData.status) ?? .failed,
                 errorMessage: jobData.error_message
@@ -464,8 +458,6 @@ final class APIClient: APIClientProtocol {
     }
     
     func muxMusic(audioUrl: URL, videoUrl: URL) async throws -> URL {
-        // TODO: Implement actual muxing or API call
-        // For now preventing compilation error
         throw APIError.unknown
     }
     

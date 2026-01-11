@@ -82,6 +82,31 @@ struct ProfileView: View {
                                     showChevron: true
                                 )
                             }
+                            
+                            // Logout
+                            Button {
+                                UserDefaults.standard.set(nil, forKey: "aura.authToken")
+                            } label: {
+                                HStack(spacing: 16) {
+                                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                                        .font(.system(size: 20))
+                                        .foregroundStyle(.red.opacity(0.8))
+                                        .frame(width: 24)
+                                    
+                                    Text("Log Out")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(.red)
+                                    
+                                    Spacer()
+                                }
+                                .padding(20)
+                                .background(Color(hex: "121214"))
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                                )
+                            }
                         }
                         .padding(.horizontal, 16)
                     }
@@ -100,7 +125,7 @@ struct ProfileView: View {
 }
 
 struct ProfileMenuCell: View {
-    let icon: String // SF Symbol name for now, update if assets exist
+    let icon: String
     let title: String
     var value: String? = nil
     let showChevron: Bool

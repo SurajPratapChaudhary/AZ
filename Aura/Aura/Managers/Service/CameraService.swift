@@ -19,12 +19,11 @@ final class CameraService: NSObject, ObservableObject {
     private let photoOutput = AVCapturePhotoOutput()
     private let videoOutput = AVCaptureVideoDataOutput()
 
-    // Strong-retain in-flight delegates (critical)
+    // Strong-retain in-flight delegates
     private var inFlightDelegates: [Int64: PhotoCaptureDelegate] = [:]
     private let delegatesLock = NSLock()
     private var nextCaptureId: Int64 = 0
-
-    // Live frames for guidance
+    
     var onVideoFrame: ((CVPixelBuffer) -> Void)?
 
     override init() {
@@ -76,7 +75,7 @@ final class CameraService: NSObject, ObservableObject {
                     Log.e("Cannot add PhotoOutput")
                 }
 
-                // Video output (guidance only)
+                // Video output
                 self.videoOutput.videoSettings = [
                     kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
                 ]
@@ -140,8 +139,7 @@ final class CameraService: NSObject, ObservableObject {
         let captureId = nextId()
 
         return try await withCheckedThrowingContinuation { cont in
-            // Log.d("captured start id=\(captureId)") // Reduced logs for speed
-
+        return try await withCheckedThrowingContinuation { cont in
             let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
             if self.photoOutput.maxPhotoDimensions.width > 0 {
                 settings.maxPhotoDimensions = self.photoOutput.maxPhotoDimensions
@@ -162,9 +160,6 @@ final class CameraService: NSObject, ObservableObject {
             }
 
             self.storeDelegate(delegate, captureId)
-
-            // Must run on session queue? No, capturePhoto is thread safe but best practice to ensure session is valid.
-            // We trust the caller or concurrency model.
             self.photoOutput.capturePhoto(with: settings, delegate: delegate)
         }
     }
@@ -182,16 +177,11 @@ final class CameraService: NSObject, ObservableObject {
         for i in 0..<count {
             do {
                 // We still await, but .speed makes it faster.
-                // We notify progress immediately after 'successful' capture return (which implies shutter fired + processed)
-                // For PERCEIVED speed, we might want to update UI earlier?
-                // The issue: await capturePhotoJPEG waits for DATA.
-                // But we want to show "Capturing 1/10" moving.
                 let jpeg = try await capturePhotoJPEG(prioritization: prioritization)
                 shots.append(jpeg)
                 onProgress?(i + 1)
             } catch {
                 Log.e("burst shot \(i+1)/\(count) failed: \(error.localizedDescription)")
-                // Continue to salvage burst
             }
         }
         
