@@ -12,7 +12,7 @@ final class CameraFlowViewModel: ObservableObject {
         case enhancing(rawPreview: UIImage, jobId: String)
         case variantsReady(PhotoJobResult, rawPreview: UIImage)
         case generatingReel(jobId: String, selectedImage: UIImage)
-        case reelReady(videoURL: URL)
+        case reelReady(videoURLs: [URL])
     }
 
     @Published var state: State = .camera
@@ -277,9 +277,8 @@ final class CameraFlowViewModel: ObservableObject {
     }
     
     func pollReelJob(jobId: String) async {
+        guard jobId != "placeholder" else { return }
         Log.d("Polling reel job id=\(jobId)")
-        
-        guard case .generatingReel = state else { return }
         
         guard case .generatingReel = state else { return }
         
@@ -291,9 +290,9 @@ final class CameraFlowViewModel: ObservableObject {
             do {
                 if let result = try await apiClient.getJobStatus(jobId: jobId) {
                     if result.status == .completed {
-                        if let videoURL = result.variants.first {
-                            Log.d("Reel job completed url=\(videoURL)")
-                            state = .reelReady(videoURL: videoURL)
+                        if !result.variants.isEmpty {
+                            Log.d("Reel job completed variants=\(result.variants.count)")
+                            state = .reelReady(videoURLs: result.variants)
                             return
                         } else {
                              Log.e("Reel job completed but no URLs found.")
@@ -354,11 +353,11 @@ struct CameraFlowView: View {
                 
             case .generatingReel(let jobId, let image):
                 ProcessingView(image: image, message: vm.progressMessage)
-                    .task { await vm.pollReelJob(jobId: jobId) }
+                    .task(id: jobId) { await vm.pollReelJob(jobId: jobId) }
                     .transition(.opacity)
                     
-            case .reelReady(let url):
-                VideoResultView(videoURL: url, onBack: {
+            case .reelReady(let urls):
+                VideoResultView(videoURLs: urls, onBack: {
                     vm.reset()
                 })
                 .transition(.opacity)

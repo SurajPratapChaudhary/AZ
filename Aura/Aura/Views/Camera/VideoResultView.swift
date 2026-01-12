@@ -3,7 +3,7 @@ import SwiftUI
 import AVKit
 
 struct VideoResultView: View {
-    let videoURL: URL
+    let videoURLs: [URL]
     let onBack: () -> Void
     
     @State private var player: AVPlayer?
@@ -27,6 +27,9 @@ struct VideoResultView: View {
             }
         }
         .onAppear { setupPlayer() }
+        .onChange(of: selectedReelTab) { _, _ in
+            setupPlayer()
+        }
         .onDisappear { player?.pause() }
         .sheet(isPresented: $showMusicSheet) {
             MusicSelectionView()
@@ -39,6 +42,7 @@ struct VideoResultView: View {
         HStack {
             Button(action: onBack) {
                 Image(systemName: "chevron.left")
+                // ... same styling ...
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(12)
@@ -62,28 +66,20 @@ struct VideoResultView: View {
     @ViewBuilder func BottomControls() -> some View {
         VStack(spacing: 20) {
             
-            HStack(spacing: 30) {
-                Button { selectedReelTab = 0 } label: {
-                    VStack(spacing: 4) {
-                        Text("Reel A")
-                            .font(.system(size: 16, weight: selectedReelTab == 0 ? .semibold : .regular))
-                            .foregroundStyle(.white)
-                        
-                        Rectangle()
-                            .fill(selectedReelTab == 0 ? Color("AccentColor") : Color.clear)
-                            .frame(width: 40, height: 2)
-                    }
-                }
-                
-                Button { selectedReelTab = 1 } label: {
-                    VStack(spacing: 4) {
-                        Text("Reel B")
-                            .font(.system(size: 16, weight: selectedReelTab == 1 ? .semibold : .regular))
-                            .foregroundStyle(.white.opacity(0.6))
-                        
-                        Rectangle()
-                            .fill(selectedReelTab == 1 ? Color("AccentColor") : Color.clear)
-                            .frame(width: 40, height: 2)
+            if videoURLs.count > 1 {
+                HStack(spacing: 30) {
+                    ForEach(0..<videoURLs.count, id: \.self) { index in
+                        Button { selectedReelTab = index } label: {
+                            VStack(spacing: 4) {
+                                Text("Reel \(Character(UnicodeScalar(65 + index)!))")
+                                    .font(.system(size: 16, weight: selectedReelTab == index ? .semibold : .regular))
+                                    .foregroundStyle(selectedReelTab == index ? .white : .white.opacity(0.6))
+                                
+                                Rectangle()
+                                    .fill(selectedReelTab == index ? Color("AccentColor") : Color.clear)
+                                    .frame(width: 40, height: 2)
+                            }
+                        }
                     }
                 }
             }
@@ -132,21 +128,32 @@ struct VideoResultView: View {
     }
     
     private func setupPlayer() {
-        let playerItem = AVPlayerItem(url: videoURL)
-        player = AVPlayer(playerItem: playerItem)
-        player?.play()
+        guard !videoURLs.isEmpty, videoURLs.indices.contains(selectedReelTab) else { return }
         
-        NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: playerItem, queue: .main) { _ in
-            player?.seek(to: .zero)
-            player?.play()
+        // Stop previous player
+        player?.pause()
+        player = nil
+        
+        let url = videoURLs[selectedReelTab]
+        let playerItem = AVPlayerItem(url: url)
+        let newPlayer = AVPlayer(playerItem: playerItem)
+        newPlayer.play()
+        self.player = newPlayer
+        
+        NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: playerItem, queue: .main) { [weak newPlayer] _ in
+            newPlayer?.seek(to: .zero)
+            newPlayer?.play()
         }
     }
     
     private func shareVideo() {
+        guard !videoURLs.isEmpty, videoURLs.indices.contains(selectedReelTab) else { return }
+        
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootVC = windowScene.windows.first?.rootViewController else { return }
         
-        let activityVC = UIActivityViewController(activityItems: [videoURL], applicationActivities: nil)
+        let url = videoURLs[selectedReelTab]
+        let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
         rootVC.present(activityVC, animated: true)
     }
 }
@@ -246,10 +253,10 @@ struct MusicSelectionView: View {
 }
 
 #Preview {
-    NavigationStack {
-        VideoResultView(
-            videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")!,
-            onBack: {}
-        )
-    }
+//    NavigationStack {
+//        VideoResultView(
+//            videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")!,
+//            onBack: {}
+//        )
+//    }
 }
