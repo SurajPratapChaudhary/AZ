@@ -176,7 +176,7 @@ protocol APIClientProtocol {
     func getJobStatus(jobId: String) async throws -> PhotoJobResult?
     func getStudioHistory(limit: Int, offset: Int) async throws -> StudioHistoryResponse
     func getCredits() async throws -> CreditsResponse
-    func muxMusic(audioUrl: URL, videoUrl: URL) async throws -> URL
+    func muxMusic(videoUrl: URL) async throws -> String
     
     // Kept for backward compatibility
     func createPhotoJob(style: AuraStyle, jpegData: Data) async throws -> String
@@ -463,8 +463,39 @@ final class APIClient: APIClientProtocol {
         return try JSONDecoder().decode(CreditsResponse.self, from: data)
     }
     
-    func muxMusic(audioUrl: URL, videoUrl: URL) async throws -> URL {
-        throw APIError.unknown
+    func muxMusic(videoUrl: URL) async throws -> String {
+        let url = baseURL.appendingPathComponent("/api/v1/jobs/mux-music")
+        Log.d("⬆️ REQUEST: \(url.absoluteString) | Video: \(videoUrl.absoluteString)")
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        
+        if let token = UserDefaults.standard.string(forKey: "aura.authToken") {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let bodyString = "video_url=\(videoUrl.absoluteString)"
+        request.httpBody = bodyString.data(using: .utf8)
+        
+        do {
+            let (data, response) = try await session.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+                let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 500
+                Log.e("❌ API muxMusic failed: \(statusCode)")
+                logResponse(data, url: url.absoluteString)
+                throw APIError.serverError(statusCode: statusCode)
+            }
+            
+            logResponse(data, url: url.absoluteString)
+            let jobResponse = try JSONDecoder().decode(JobResponse.self, from: data)
+            return jobResponse.job_id
+            
+        } catch {
+            Log.e("❌ API muxMusic Exception: \(error)")
+            throw error
+        }
     }
     
     // MARK: - Legacy / Helper

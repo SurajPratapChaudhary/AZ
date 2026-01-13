@@ -1,14 +1,94 @@
 
 import SwiftUI
 import AVKit
+import Combine
+
+@MainActor
+class VideoResultViewModel: ObservableObject {
+    @Published var videoURLs: [URL]
+    @Published var selectedReelIndex: Int = 0
+    @Published var isMuxing: Bool = false
+    @Published var progressMessage: String = ""
+    @Published var errorMessage: String?
+    @Published var showErrorAlert: Bool = false
+    
+    private let apiClient: APIClientProtocol
+    
+    init(videoURLs: [URL], apiClient: APIClientProtocol = APIClient()) {
+        self.videoURLs = videoURLs
+        self.apiClient = apiClient
+    }
+    
+    func addDefaultMusic() {
+        guard !videoURLs.isEmpty, videoURLs.indices.contains(selectedReelIndex) else { return }
+        let currentURL = videoURLs[selectedReelIndex]
+        
+        Task {
+            isMuxing = true
+            progressMessage = "Adding Music..."
+            
+            do {
+                let jobId = try await apiClient.muxMusic(videoUrl: currentURL)
+                Log.d("Mux job started id=\(jobId)")
+                await pollMuxJob(jobId: jobId, forIndex: selectedReelIndex)
+            } catch {
+                Log.e("Mux start failed: \(error)")
+                handleError("Failed to start music addition.")
+            }
+        }
+    }
+    
+    private func pollMuxJob(jobId: String, forIndex index: Int) async {
+        let pollInterval: UInt64 = 2_000_000_000 // 2 seconds
+        
+        while true {
+            do {
+                if let result = try await apiClient.getJobStatus(jobId: jobId) {
+                    if result.status == .completed {
+                         if let newURL = result.variants.first {
+                             Log.d("Mux success. New URL: \(newURL)")
+                             // Update the URL for the specific index
+                             if videoURLs.indices.contains(index) {
+                                 videoURLs[index] = newURL
+                             }
+                             isMuxing = false
+                             return
+                         } else {
+                             handleError("Music added but no URL returned.")
+                             return
+                         }
+                    } else if result.status == .failed {
+                        handleError(result.errorMessage ?? "Music addition failed.")
+                        return
+                    }
+                }
+            } catch {
+                Log.e("Polling mux error: \(error)")
+            }
+            
+            try? await Task.sleep(nanoseconds: pollInterval)
+        }
+    }
+    
+    private func handleError(_ message: String) {
+        errorMessage = message
+        showErrorAlert = true
+        isMuxing = false
+    }
+}
 
 struct VideoResultView: View {
-    let videoURLs: [URL]
     let onBack: () -> Void
+    @StateObject private var vm: VideoResultViewModel
     
+    // Player state updates on URL change
     @State private var player: AVPlayer?
     @State private var showMusicSheet = false
-    @State private var selectedReelTab = 0
+    
+    init(videoURLs: [URL], onBack: @escaping () -> Void) {
+        self.onBack = onBack
+        self._vm = StateObject(wrappedValue: VideoResultViewModel(videoURLs: videoURLs))
+    }
     
     var body: some View {
         ZStack {
@@ -22,19 +102,39 @@ struct VideoResultView: View {
             }
             
             VStack {
+                Header()
                 Spacer()
                 BottomControls()
             }
+            
+            if vm.isMuxing {
+                Color.black.opacity(0.6).ignoresSafeArea()
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(1.5)
+                    Text(vm.progressMessage)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                }
+            }
         }
         .onAppear { setupPlayer() }
-        .onChange(of: selectedReelTab) { _, _ in
-            setupPlayer()
-        }
+        .onChange(of: vm.selectedReelIndex) { _, _ in setupPlayer() }
+        .onChange(of: vm.videoURLs) { _, _ in setupPlayer() } // Reload if URL changes (muxed)
         .onDisappear { player?.pause() }
         .sheet(isPresented: $showMusicSheet) {
-            MusicSelectionView()
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            MusicSelectionView(onSelect: {
+                vm.addDefaultMusic()
+                showMusicSheet = false
+            })
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .alert("Error", isPresented: $vm.showErrorAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(vm.errorMessage ?? "Unknown error")
         }
     }
     
@@ -42,7 +142,6 @@ struct VideoResultView: View {
         HStack {
             Button(action: onBack) {
                 Image(systemName: "chevron.left")
-                // ... same styling ...
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(12)
@@ -61,22 +160,23 @@ struct VideoResultView: View {
             Color.clear.frame(width: 44, height: 44)
         }
         .padding(.horizontal)
+        .padding(.top, 50) // Adjust for safe area if needed
     }
     
     @ViewBuilder func BottomControls() -> some View {
         VStack(spacing: 20) {
             
-            if videoURLs.count > 1 {
+            if vm.videoURLs.count > 1 {
                 HStack(spacing: 30) {
-                    ForEach(0..<videoURLs.count, id: \.self) { index in
-                        Button { selectedReelTab = index } label: {
+                    ForEach(0..<vm.videoURLs.count, id: \.self) { index in
+                        Button { vm.selectedReelIndex = index } label: {
                             VStack(spacing: 4) {
                                 Text("Reel \(Character(UnicodeScalar(65 + index)!))")
-                                    .font(.system(size: 16, weight: selectedReelTab == index ? .semibold : .regular))
-                                    .foregroundStyle(selectedReelTab == index ? .white : .white.opacity(0.6))
+                                    .font(.system(size: 16, weight: vm.selectedReelIndex == index ? .semibold : .regular))
+                                    .foregroundStyle(vm.selectedReelIndex == index ? .white : .white.opacity(0.6))
                                 
                                 Rectangle()
-                                    .fill(selectedReelTab == index ? Color("AccentColor") : Color.clear)
+                                    .fill(vm.selectedReelIndex == index ? Color("AccentColor") : Color.clear)
                                     .frame(width: 40, height: 2)
                             }
                         }
@@ -124,17 +224,20 @@ struct VideoResultView: View {
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 34)
-        
     }
     
     private func setupPlayer() {
-        guard !videoURLs.isEmpty, videoURLs.indices.contains(selectedReelTab) else { return }
+        guard !vm.videoURLs.isEmpty, vm.videoURLs.indices.contains(vm.selectedReelIndex) else { return }
         
-        // Stop previous player
+        let url = vm.videoURLs[vm.selectedReelIndex]
+        Log.d("Setting up player for: \(url)")
+        
+        // If same URL, don't recreate player to avoid glitch, but here we might WANT to reload if muxed
+        // For simplicity, just recreate
+        
         player?.pause()
         player = nil
         
-        let url = videoURLs[selectedReelTab]
         let playerItem = AVPlayerItem(url: url)
         let newPlayer = AVPlayer(playerItem: playerItem)
         newPlayer.play()
@@ -147,25 +250,21 @@ struct VideoResultView: View {
     }
     
     private func shareVideo() {
-        guard !videoURLs.isEmpty, videoURLs.indices.contains(selectedReelTab) else { return }
+        guard !vm.videoURLs.isEmpty, vm.videoURLs.indices.contains(vm.selectedReelIndex) else { return }
         
+        let url = vm.videoURLs[vm.selectedReelIndex]
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootVC = windowScene.windows.first?.rootViewController else { return }
         
-        let url = videoURLs[selectedReelTab]
         let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
         rootVC.present(activityVC, animated: true)
     }
 }
 
 struct MusicSelectionView: View {
-    let tracks = [
-        "Midnight Serenade", "Dawn's Embrace", "Afternoon Whispers",
-        "Twilight Reflections", "Sunset Melodies", "Nocturnal Rhythm"
-    ]
-    
-    let styles = ["Luxury", "Cinematic", "Clean", "Editorial", "Night"]
-    @State private var selectedStyle = "Luxury"
+    // Only Default Music available as per requirement
+    let tracks = ["Default Music"]
+    var onSelect: () -> Void
     
     @Environment(\.dismiss) var dismiss
     
@@ -182,81 +281,54 @@ struct MusicSelectionView: View {
                     .padding(.top, 20)
                     .padding(.horizontal)
                 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    MusicStyles()
-                }
+                Text("Available Tracks")
+                    .font(.subheadline)
+                    .foregroundStyle(.gray)
+                    .padding(.horizontal)
                 
                 ScrollView {
-                    Musics()
+                    VStack(spacing: 8) {
+                        ForEach(tracks, id: \.self) { track in
+                            HStack {
+                                ZStack {
+                                    Color.white.opacity(0.1)
+                                    Image(systemName: "music.note")
+                                        .foregroundStyle(.white)
+                                }
+                                .frame(width: 48, height: 48)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(track)
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(.white)
+                                    Text("Aura Original")
+                                        .font(.caption)
+                                        .foregroundStyle(.gray)
+                                }
+                                
+                                Spacer()
+                                
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundStyle(Color("AccentColor"))
+                            }
+                            .padding()
+                            .background(Color.white.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .padding(.horizontal)
+                            .onTapGesture {
+                                onSelect()
+                            }
+                        }
+                    }
+                    .padding(.top, 8)
                 }
             }
         }
-    }
-    
-    @ViewBuilder func MusicStyles() -> some View {
-        HStack(spacing: 12) {
-            ForEach(styles, id: \.self) { style in
-                Text(style)
-                    .font(.system(size: 14, weight: selectedStyle == style ? .semibold : .regular))
-                    .foregroundStyle(selectedStyle == style ? Color.black : Color.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(selectedStyle == style ? Color("AccentColor") : Color.white.opacity(0.1))
-                    .clipShape(Capsule())
-                    .onTapGesture {
-                        withAnimation { selectedStyle = style }
-                    }
-            }
-        }
-        .padding(.horizontal)
-    }
-    
-    @ViewBuilder func Musics() -> some View {
-        VStack(spacing: 8) {
-            ForEach(tracks, id: \.self) { track in
-                HStack {
-                    ZStack {
-                        Color.white.opacity(0.1)
-                        Image(systemName: "music.note")
-                            .foregroundStyle(.white)
-                    }
-                    .frame(width: 48, height: 48)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(track)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(.white)
-                        Text("3:15")
-                            .font(.caption)
-                            .foregroundStyle(.gray)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.gray)
-                }
-                .padding()
-                .background(Color.white.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .padding(.horizontal)
-                .onTapGesture {
-                    //TODO: music Select Logic
-                    dismiss()
-                }
-            }
-        }
-        .padding(.top, 8)
-        
     }
 }
 
 #Preview {
-//    NavigationStack {
-//        VideoResultView(
-//            videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")!,
-//            onBack: {}
-//        )
-//    }
+//    VideoResultView(videoURLs: [], onBack: {})
 }
