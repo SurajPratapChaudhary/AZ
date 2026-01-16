@@ -1,4 +1,3 @@
-
 import SwiftUI
 import AuthenticationServices
 import GoogleSignIn
@@ -17,7 +16,7 @@ struct AuthView: View {
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
-                    .minimumScaleFactor(0.8) // Ensure it fits
+                    .minimumScaleFactor(0.8)
                 
                 Text("No filters. No retouching. Just premium results.")
                     .font(.system(size: 16))
@@ -27,69 +26,32 @@ struct AuthView: View {
             }
             .padding(.bottom, 40)
             
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.red)
-                    .padding(.bottom, 10)
-            }
-            
             VStack(spacing: 16) {
-                // Apple Sign In
-                SignInWithAppleButton(.continue) { request in
-                    request.requestedScopes = [.fullName, .email]
-                } onCompletion: { result in
-                    viewModel.handleAppleLogin(result, authService: authService)
-                }
-                .signInWithAppleButtonStyle(.white)
-                .frame(height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 28))
+                AppleButton()
                 
-                // Google Button
-                Button {
-                    handleGoogleSignIn()
-                } label: {
-                    HStack(spacing: 12) {
-                        Image("google-icon")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 24)
-                        Text("Continue with Google")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(Color.white.opacity(0.1))
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 28))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 28)
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                    )
-                }
-
-                // Email Button
-                Button {
-                    // Email flow placeholder
-                } label: {
-                    HStack {
-                        Image(systemName: "envelope.fill")
-                        Text("Continue With Email")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(Color.white.opacity(0.1))
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 28))
-                     .overlay(
-                        RoundedRectangle(cornerRadius: 28)
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                    )
-                }
+                GoogleButton()
+                
+                EmailButton()
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 50)
+        }
+        .alert("Something went wrong",
+               isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { newValue in
+                    if !newValue {
+                        viewModel.errorMessage = nil
+                    }
+                }
+               ),
+               presenting: viewModel.errorMessage
+        ) { _ in
+            Button("OK", role: .cancel) {
+                viewModel.errorMessage = nil
+            }
+        } message: { error in
+            Text(error)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
@@ -99,6 +61,62 @@ struct AuthView: View {
                 .ignoresSafeArea()
                 .overlay(Color.black.opacity(0.4))
         }
+    }
+    
+    @ViewBuilder func EmailButton() -> some View {
+        Button {
+            // Email flow placeholder
+        } label: {
+            HStack {
+                Image(systemName: "envelope.fill")
+                Text("Continue With Email")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background(Color.white.opacity(0.1))
+            .foregroundStyle(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 28))
+            .overlay(
+                RoundedRectangle(cornerRadius: 28)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+            )
+        }
+    }
+    
+    @ViewBuilder func GoogleButton() -> some View {
+        Button {
+            handleGoogleSignIn()
+        } label: {
+            HStack(spacing: 12) {
+                Image("google-icon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24, height: 24)
+                Text("Continue with Google")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background(Color.white.opacity(0.1))
+            .foregroundStyle(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 28))
+            .overlay(
+                RoundedRectangle(cornerRadius: 28)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+            )
+        }
+    }
+    
+    @ViewBuilder func AppleButton() -> some View {
+        SignInWithAppleButton(.continue) { request in
+            request.requestedScopes = [.fullName, .email]
+        } onCompletion: { result in
+            viewModel.handleAppleLogin(result, authService: authService)
+        }
+        .signInWithAppleButtonStyle(.white)
+        .frame(height: 56)
+        .clipShape(RoundedRectangle(cornerRadius: 28))
     }
     
     private func handleGoogleSignIn() {

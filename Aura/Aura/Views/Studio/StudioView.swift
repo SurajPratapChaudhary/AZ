@@ -3,7 +3,7 @@ import AVFoundation
 
 struct StudioView: View {
     @StateObject private var vm = StudioViewModel()
-    @State private var selectedItem: StudioHistoryResponse.StudioItem?
+    @State private var selectedGridItem: StudioViewModel.StudioGridItem?
     
     private let columns = [
         GridItem(.flexible(), spacing: 16),
@@ -24,10 +24,20 @@ struct StudioView: View {
                         .padding(.bottom, 20)
                     
                     if vm.isLoading && vm.items.isEmpty {
-                        Spacer()
-                        ProgressView()
-                            .tint(.white)
-                        Spacer()
+                        ScrollView {
+                            LazyVGrid(columns: columns, spacing: 16) {
+                                ForEach(0..<10, id: \.self) { _ in
+                                    ZStack {
+                                        Color.gray.opacity(0.3)
+                                    }
+                                    .frame(height: 220)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .shimmeringEffect(loading: true)
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 100)
+                        }
                     } else if let error = vm.errorMessage {
                         Spacer()
                         VStack(spacing: 8) {
@@ -62,13 +72,15 @@ struct StudioView: View {
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(vm.items, id: \.id) { item in
-                                    StudioItemCard(item: item)
-                                        .onTapGesture {
-                                            selectedItem = item
-                                        }
-                                        .onAppear {
-                                            vm.loadMoreContent(currentItem: item)
-                                        }
+                                    Button {
+                                        selectedGridItem = item
+                                    } label: {
+                                        StudioItemCard(item: item)
+                                    }
+                                    .buttonStyle(.bouncy)
+                                    .onAppear {
+                                        vm.loadMoreContent(currentItem: item)
+                                    }
                                 }
                                 
                                 if vm.isLoading && !vm.items.isEmpty {
@@ -86,14 +98,14 @@ struct StudioView: View {
                 }
             }
             .navigationBarHidden(true)
-            .fullScreenCover(item: $selectedItem) { item in
-                if item.type == "video" || item.type == "mux" {
-                    StudioVideoDetailView(item: item) {
-                        selectedItem = nil
+            .fullScreenCover(item: $selectedGridItem) { gridItem in
+                if gridItem.type == "video" || gridItem.type == "mux" {
+                    StudioVideoDetailView(item: gridItem.originalItem) {
+                        selectedGridItem = nil
                     }
                 } else {
-                    StudioImageDetailView(item: item) {
-                        selectedItem = nil
+                    StudioImageDetailView(vm: vm, item: gridItem.originalItem, selectedURL: gridItem.url) {
+                        selectedGridItem = nil
                     }
                 }
             }
@@ -107,26 +119,21 @@ struct StudioView: View {
 }
 
 struct StudioItemCard: View {
-    let item: StudioHistoryResponse.StudioItem
+    let item: StudioViewModel.StudioGridItem
     
     var body: some View {
         ZStack(alignment: .topLeading) {
             GeometryReader { geo in
-                if let urlString = item.variants.first, let url = URL(string: urlString) {
-                    if item.type == "video" || item.type == "mux" {
-                         VideoThumbnailView(videoURL: url)
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                            .clipped()
-                    } else {
-                        AuraImageView(url: url)
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                            .clipped()
-                    }
-                } else {
-                    Color.gray.opacity(0.2)
+                if item.type == "video" || item.type == "mux" {
+                     VideoThumbnailView(videoURL: item.url)
+                        .aspectRatio(contentMode: .fill)
                         .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                } else {
+                    AuraImageView(url: item.url)
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
                 }
             }
             

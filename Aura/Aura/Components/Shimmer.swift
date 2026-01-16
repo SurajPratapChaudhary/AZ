@@ -111,4 +111,7 @@ public extension View {
             animation: .linear(duration: duration).delay(delay).repeatForever(autoreverses: bounce)
         )
     }
+    func shimmeringEffect(loading: Bool) -> some View {
+        shimmering(active: loading)
+    }
 }

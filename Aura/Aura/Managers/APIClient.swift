@@ -15,6 +15,7 @@ struct PhotoJobResult: Codable {
     enum JobStatus: String, Codable {
         case processing = "PROCESSING"
         case queued = "QUEUED"
+        case pending = "PENDING"
         case completed = "COMPLETED"
         case failed = "FAILED"
     }

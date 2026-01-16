@@ -50,7 +50,7 @@ struct StudioVideoDetailView: View {
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 56)
-                        .background(Color.black.opacity(0.3)) // Darker for video overlay compatibility? Matches screenshot
+                        .background(Color.black.opacity(0.3)) 
                         .background(.ultraThinMaterial)
                         .clipShape(RoundedRectangle(cornerRadius: 28))
                     }

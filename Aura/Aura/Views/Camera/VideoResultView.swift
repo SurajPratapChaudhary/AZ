@@ -81,7 +81,6 @@ struct VideoResultView: View {
     let onBack: () -> Void
     @StateObject private var vm: VideoResultViewModel
     
-    // Player state updates on URL change
     @State private var player: AVPlayer?
     @State private var showMusicSheet = false
     
@@ -121,7 +120,7 @@ struct VideoResultView: View {
         }
         .onAppear { setupPlayer() }
         .onChange(of: vm.selectedReelIndex) { _, _ in setupPlayer() }
-        .onChange(of: vm.videoURLs) { _, _ in setupPlayer() } // Reload if URL changes (muxed)
+        .onChange(of: vm.videoURLs) { _, _ in setupPlayer() }
         .onDisappear { player?.pause() }
         .sheet(isPresented: $showMusicSheet) {
             MusicSelectionView(onSelect: {
@@ -160,7 +159,7 @@ struct VideoResultView: View {
             Color.clear.frame(width: 44, height: 44)
         }
         .padding(.horizontal)
-        .padding(.top, 50) // Adjust for safe area if needed
+        .padding(.top, 50)
     }
     
     @ViewBuilder func BottomControls() -> some View {
@@ -262,7 +261,6 @@ struct VideoResultView: View {
 }
 
 struct MusicSelectionView: View {
-    // Only Default Music available as per requirement
     let tracks = ["Default Music"]
     var onSelect: () -> Void
     

@@ -5,7 +5,6 @@
 //  Created by Alijonov Shohruhmirzo on 24/12/25.
 //
 
-
 import Foundation
 
 enum AuraStyle: String, CaseIterable, Identifiable, Codable {

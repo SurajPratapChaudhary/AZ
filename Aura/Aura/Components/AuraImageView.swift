@@ -54,47 +54,12 @@ class ImageLoader: ObservableObject {
 struct AuraImageView: View {
     let url: URL?
     
-    @StateObject private var loader: ImageLoader
-    
     init(url: URL?) {
         self.url = url
-        _loader = StateObject(wrappedValue: ImageLoader(url: url ?? URL(string: "https://placeholder")!))
     }
     
     var body: some View {
-        Group {
-            if let _ = url {
-                content
-            } else {
-                Color.gray
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private var content: some View {
-        if let image = loader.image {
-            Image(uiImage: image)
-                .resizable()
-        } else if loader.isLoading {
-            ZStack {
-                Color.gray.opacity(0.3)
-                ProgressView()
-                    .tint(.white)
-            }
-        } else if let _ = loader.errorMessage {
-            ZStack {
-                Color.gray
-                Image(systemName: "exclamationmark.triangle")
-                    .foregroundStyle(.white)
-            }
-        } else {
-            // Idle state, not started yet
-            Color.gray.opacity(0.3)
-                .onAppear {
-                    loader.load()
-                }
-        }
+        CachedImage(url: url)
     }
 }
 
