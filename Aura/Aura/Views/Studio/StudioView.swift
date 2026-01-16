@@ -54,6 +54,7 @@ struct StudioView: View {
         }
     }
     
+    //MARK: Main Content
     @ViewBuilder func MainContent() -> some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
@@ -82,6 +83,7 @@ struct StudioView: View {
         }
     }
     
+    //MARK: empty view
     @ViewBuilder func EmptyView() -> some View {
         Spacer()
         VStack(spacing: 12) {
@@ -100,6 +102,7 @@ struct StudioView: View {
         Spacer()
     }
     
+    //MARK: loading view
     @ViewBuilder func LoadingView() -> some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
@@ -117,6 +120,7 @@ struct StudioView: View {
         }
     }
     
+    //MARK: Error View
     @ViewBuilder func ErrorView(_ error: String) -> some View {
         Spacer()
         VStack(spacing: 8) {

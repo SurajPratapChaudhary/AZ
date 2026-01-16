@@ -18,38 +18,33 @@ struct PhotoResultsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Spacer()
                 
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Spacer()
-                        Capsule()
-                            .fill(Color.gray.opacity(0.5))
-                            .frame(width: 40, height: 4)
-                        Spacer()
-                    }
-                    .padding(.top, 10)
+                VStack(alignment: .leading, spacing: 22) {
                     
                     Text("Enhanced")
                         .font(.headline)
                         .foregroundStyle(.white)
-                        .padding(.leading, 20)
-                    
+                        .padding(.horizontal, 16)
+
                     Text("Your photo was upgraded")
                         .font(.subheadline)
                         .foregroundStyle(.gray)
-                        .padding(.leading, 20)
-                    
+                        .padding(.horizontal, 16)
+
                     ThumbNails()
                     
                     CreateReelButton()
-                    
+                        .padding(.horizontal, 16)
+
                     SaveAndShareButtons()
+                        .padding(.horizontal, 16)
                     
                     RetakeButton()
+                        .padding(.horizontal, 16)
                 }
-                .padding(.bottom)
-                .background(Color.black.opacity(0.8))
+                .padding(.vertical)
+                .background(.ultraThinMaterial.opacity(0.9))
                 .clipShape(RoundedRectangle(cornerRadius: 24))
-                .padding(.bottom, -40)
+                .padding()
             }
         }
         .safeAreaInset(edge: .top, content: Header)
@@ -112,7 +107,7 @@ struct PhotoResultsView: View {
     @ViewBuilder func SaveAndShareButtons() -> some View {
         HStack(spacing: 12) {
             Button {
-                //TODO: Save logic
+                Task { await saveSelectedImage() }
             } label: {
                 Label("Save", systemImage: "arrow.down")
                     .font(.system(size: 16, weight: .medium))
@@ -124,7 +119,7 @@ struct PhotoResultsView: View {
             }
             
             Button {
-                //TODO: Share logic
+                Task { await shareSelectedImage() }
             } label: {
                 Label("Share", systemImage: "square.and.arrow.up")
                     .font(.system(size: 16, weight: .medium))
@@ -135,16 +130,14 @@ struct PhotoResultsView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 25))
             }
         }
-        .padding(.horizontal, 20)
     }
     
     @ViewBuilder func ThumbNails() -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 16) {
             Text("Thumbnails")
-                .font(.caption)
-                .foregroundStyle(.gray)
-                .padding(.leading, 20)
-            
+                .font(.system(size: 14))
+                .padding(.horizontal, 16)
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(0..<variants.count, id: \.self) { index in
@@ -163,7 +156,7 @@ struct PhotoResultsView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 16)
             }
         }
     }
@@ -180,7 +173,48 @@ struct PhotoResultsView: View {
                 .background(Color("AccentColor"))
                 .clipShape(RoundedRectangle(cornerRadius: 28))
         }
-        .padding(.horizontal, 20)
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func getSelectedUIImage() async -> UIImage? {
+        if variants.isEmpty {
+            return rawImage
+        }
+        
+        guard variants.indices.contains(selectedIndex) else { return nil }
+        let url = variants[selectedIndex]
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            return UIImage(data: data)
+        } catch {
+            print("Failed to download image for action: \(error)")
+            return nil
+        }
+    }
+    
+    private func saveSelectedImage() async {
+        guard let image = await getSelectedUIImage() else { return }
+        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+        // Check if we can show a toast here, for now silent success
+    }
+    
+    private func shareSelectedImage() async {
+        guard let image = await getSelectedUIImage() else { return }
+        
+        await MainActor.run {
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let rootVC = windowScene.windows.first?.rootViewController else { return }
+            
+            let activityVC = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+            
+            // iPad support
+            activityVC.popoverPresentationController?.sourceView = windowScene.windows.first
+            activityVC.popoverPresentationController?.sourceRect = CGRect(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY, width: 0, height: 0)
+            
+            rootVC.present(activityVC, animated: true)
+        }
     }
 }
 
@@ -188,8 +222,8 @@ struct PhotoResultsView: View {
     PhotoResultsView(
         rawImage: UIImage(),
         variants: [
-            URL(string: "https://via.placeholder.com/300")!,
-            URL(string: "https://via.placeholder.com/300/0000FF")!
+            URL(string: "https://media.istockphoto.com/id/154232673/photo/blue-ridge-parkway-scenic-landscape-appalachian-mountains-ridges-sunset-layers.jpg?s=612x612&w=0&k=20&c=m2LZsnuJl6Un7oW4pHBH7s6Yr9-yB6pLkZ-8_vTj2M0=")!,
+            URL(string: "https://media.istockphoto.com/id/500601834/photo/lake-moraine-and-canoe-dock-in-banff-national-park.jpg?s=612x612&w=0&k=20&c=TRuwRNk0hMinV-XA0pyvaZHKIhHEtdpGqzmcGy-VAlo=")!
         ],
         onRetake: {},
         onCreateReel: { _ in }

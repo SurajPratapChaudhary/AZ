@@ -33,7 +33,7 @@ struct StudioImageDetailView: View {
                 .transition(.opacity)
                 
             case .idle:
-                detailContent
+                DetailContent()
                     .transition(.opacity)
             }
         }
@@ -45,127 +45,150 @@ struct StudioImageDetailView: View {
         }
     }
     
-    var detailContent: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                Spacer()
-                
-                if let url = selectedURL ?? item.variants.first.flatMap({ URL(string: $0) }) {
-                    ZStack {
-                        AuraImageView(url: url)
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxHeight: 500)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .padding(.horizontal, 20)
-                            .onAppear {
-                                Task {
-                                    if let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
-                                        loadedImage = image
-                                    }
-                                }
-                            }
-                    }
-                } else {
-                    Text("No image found")
+    @ViewBuilder func DetailContent() -> some View {
+        VStack(spacing: 0) {
+            Spacer()
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Enhanced")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    
+                    Text("Your photo was upgraded")
+                        .font(.subheadline)
                         .foregroundStyle(.gray)
                 }
+                .padding(.top, 24)
+                .padding(.horizontal, 20)
+                
+                CreateReelButton()
+                
+                SaveShareButtons()
                 
                 Spacer()
-                
-                VStack(alignment: .leading, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Enhanced")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                        
-                        Text("Your photo was upgraded")
-                            .font(.subheadline)
-                            .foregroundStyle(.gray)
-                    }
-                    .padding(.top, 24)
-                    .padding(.horizontal, 20)
-                    
-                    Button {
-                        if let img = loadedImage {
-                            vm.generateReel(from: img)
-                        }
-                    } label: {
-                        Text("Create 8 Reel")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.black)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(Color("AccentColor"))
-                            .clipShape(RoundedRectangle(cornerRadius: 28))
-                    }
-                    .padding(.horizontal, 20)
-                    .disabled(loadedImage == nil)
-                    
-                    HStack(spacing: 12) {
-                        Button {
-                            saveImage()
-                        } label: {
-                            HStack {
-                                Image(systemName: "arrow.down")
-                                Text("Save")
-                            }
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(Color(UIColor.systemGray6).opacity(0.3))
-                            .clipShape(RoundedRectangle(cornerRadius: 28))
-                        }
-                        
-                        Button {
-                            shareImage()
-                        } label: {
-                            HStack {
-                                Image(systemName: "square.and.arrow.up")
-                                Text("Share")
-                            }
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(Color(UIColor.systemGray6).opacity(0.3))
-                            .clipShape(RoundedRectangle(cornerRadius: 28))
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    
-                     Spacer()
-                        .frame(height: 20)
-                }
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 24))
-                .padding(.bottom, -30)
+                    .frame(height: 20)
             }
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .padding()
         }
-        .safeAreaInset(edge: .top) {
-            HStack {
-                Button(action: onBack) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(12)
-                        .background(Color.black.opacity(0.3))
-                        .clipShape(Circle())
-                }
-                
-                Spacer()
-                
-                Text("Post Preview")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                
-                Spacer()
-                
-                Color.clear.frame(width: 44, height: 44)
-            }
-            .padding(.horizontal)
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .top, content: TopArea)
         .navigationBarHidden(true)
+        .background {
+            if let url = selectedURL ?? item.variants.first.flatMap({ URL(string: $0) }) {
+                ZStack {
+                    AuraImageView(url: url)
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .screenWidth, maxHeight: .screenHeight)
+                        .ignoresSafeArea()
+                }
+            } else {
+                Text("No image found")
+                    .foregroundStyle(.gray)
+            }
+        }
+        .task {
+            await loadImage()
+        }
+    }
+    
+    @ViewBuilder func CreateReelButton() -> some View {
+        Button {
+            if let img = loadedImage {
+                vm.generateReel(from: img)
+            }
+        } label: {
+            Text("Create 8 Reel")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.black)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .background(Color("AccentColor"))
+                .clipShape(RoundedRectangle(cornerRadius: 28))
+        }
+        .padding(.horizontal, 20)
+        .disabled(loadedImage == nil)
+    }
+    
+    @ViewBuilder func SaveShareButtons() -> some View {
+        HStack(spacing: 12) {
+            Button {
+                saveImage()
+            } label: {
+                HStack {
+                    Image(systemName: "arrow.down")
+                    Text("Save")
+                }
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .background(Color(UIColor.systemGray6).opacity(0.3))
+                .clipShape(RoundedRectangle(cornerRadius: 28))
+            }
+            
+            Button {
+                shareImage()
+            } label: {
+                HStack {
+                    Image(systemName: "square.and.arrow.up")
+                    Text("Share")
+                }
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .background(Color(UIColor.systemGray6).opacity(0.3))
+                .clipShape(RoundedRectangle(cornerRadius: 28))
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+    
+    @ViewBuilder func TopArea() -> some View {
+        HStack {
+            Button(action: onBack) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(12)
+                    .background(Color.black.opacity(0.3))
+                    .clipShape(Circle())
+            }
+            
+            Spacer()
+            
+            Text("Post Preview")
+                .font(.headline)
+                .foregroundStyle(.white)
+            
+            Spacer()
+            
+            Color.clear.frame(width: 44, height: 44)
+        }
+        .padding(.horizontal)
+    }
+    
+    private func loadImage() async {
+        // Determine URL logic (same as in body)
+        let urlToLoad = selectedURL ?? item.variants.first.flatMap({ URL(string: $0) })
+        
+        guard let url = urlToLoad else { return }
+        
+        // Prevent redundant loading
+        if loadedImage != nil { return }
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let image = UIImage(data: data) {
+                await MainActor.run {
+                    self.loadedImage = image
+                }
+            }
+        } catch {
+            print("Failed to load image data: \(error)")
+        }
     }
     
     private func saveImage() {
@@ -198,7 +221,7 @@ struct StudioImageDetailView: View {
         status: "completed",
         created_at: "2024-01-01",
         output_urls: [
-            JobStatusResponse.JobStatusData.OutputUrl(url: "https://via.placeholder.com/500", type: "upscaled", index: 0, rank: 0)
+            JobStatusResponse.JobStatusData.OutputUrl(url: "https://media.istockphoto.com/id/500601834/photo/lake-moraine-and-canoe-dock-in-banff-national-park.jpg?s=612x612&w=0&k=20&c=TRuwRNk0hMinV-XA0pyvaZHKIhHEtdpGqzmcGy-VAlo=", type: "upscaled", index: 0, rank: 0)
         ],
         style: "Luxury"
     )
