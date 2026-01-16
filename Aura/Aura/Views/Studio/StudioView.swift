@@ -24,76 +24,13 @@ struct StudioView: View {
                         .padding(.bottom, 20)
                     
                     if vm.isLoading && vm.items.isEmpty {
-                        ScrollView {
-                            LazyVGrid(columns: columns, spacing: 16) {
-                                ForEach(0..<10, id: \.self) { _ in
-                                    ZStack {
-                                        Color.gray.opacity(0.3)
-                                    }
-                                    .frame(height: 220)
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                                    .shimmeringEffect(loading: true)
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 100)
-                        }
+                        LoadingView()
                     } else if let error = vm.errorMessage {
-                        Spacer()
-                        VStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle")
-                                .font(.system(size: 40))
-                                .foregroundStyle(.red)
-                            Text(error)
-                                .foregroundStyle(.white)
-                            Button("Retry") {
-                                Task { await vm.refresh() }
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        Spacer()
+                        ErrorView(error)
                     } else if vm.items.isEmpty {
-                        Spacer()
-                        VStack(spacing: 12) {
-                            Image(systemName: "photo.stack")
-                                .font(.system(size: 50))
-                                .foregroundStyle(.gray.opacity(0.5))
-                            Text("No history yet")
-                                .font(.headline)
-                                .foregroundStyle(.gray)
-                            Text("Your enhanced photos and reels will appear here.")
-                                .font(.caption)
-                                .foregroundStyle(.gray)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal)
-                        }
-                        Spacer()
+                        EmptyView()
                     } else {
-                        ScrollView {
-                            LazyVGrid(columns: columns, spacing: 16) {
-                                ForEach(vm.items, id: \.id) { item in
-                                    Button {
-                                        selectedGridItem = item
-                                    } label: {
-                                        StudioItemCard(item: item)
-                                    }
-                                    .buttonStyle(.bouncy)
-                                    .onAppear {
-                                        vm.loadMoreContent(currentItem: item)
-                                    }
-                                }
-                                
-                                if vm.isLoading && !vm.items.isEmpty {
-                                    ProgressView()
-                                        .tint(.white)
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 100)
-                        }
-                        .refreshable {
-                            await vm.refresh()
-                        }
+                        MainContent()
                     }
                 }
             }
@@ -116,8 +53,88 @@ struct StudioView: View {
             }
         }
     }
+    
+    @ViewBuilder func MainContent() -> some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 16) {
+                ForEach(vm.items, id: \.id) { item in
+                    Button {
+                        selectedGridItem = item
+                    } label: {
+                        StudioItemCard(item: item)
+                    }
+                    .buttonStyle(.bouncy)
+                    .onAppear {
+                        vm.loadMoreContent(currentItem: item)
+                    }
+                }
+                
+                if vm.isLoading && !vm.items.isEmpty {
+                    ProgressView()
+                        .tint(.white)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 100)
+        }
+        .refreshable {
+            await vm.refresh()
+        }
+    }
+    
+    @ViewBuilder func EmptyView() -> some View {
+        Spacer()
+        VStack(spacing: 12) {
+            Image(systemName: "photo.stack")
+                .font(.system(size: 50))
+                .foregroundStyle(.gray.opacity(0.5))
+            Text("No history yet")
+                .font(.headline)
+                .foregroundStyle(.gray)
+            Text("Your enhanced photos and reels will appear here.")
+                .font(.caption)
+                .foregroundStyle(.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+        }
+        Spacer()
+    }
+    
+    @ViewBuilder func LoadingView() -> some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 16) {
+                ForEach(0..<10, id: \.self) { _ in
+                    ZStack {
+                        Color.gray.opacity(0.3)
+                    }
+                    .frame(height: 220)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .shimmeringEffect(loading: true)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 100)
+        }
+    }
+    
+    @ViewBuilder func ErrorView(_ error: String) -> some View {
+        Spacer()
+        VStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 40))
+                .foregroundStyle(.red)
+            Text(error)
+                .foregroundStyle(.white)
+            Button("Retry") {
+                Task { await vm.refresh() }
+            }
+            .buttonStyle(.bordered)
+        }
+        Spacer()
+    }
 }
 
+//MARK: Item Card
 struct StudioItemCard: View {
     let item: StudioViewModel.StudioGridItem
     
@@ -154,6 +171,7 @@ struct StudioItemCard: View {
     }
 }
 
+//MARK: Item Thumbnail
 struct VideoThumbnailView: View {
     let videoURL: URL
     @State private var thumbnail: UIImage?
