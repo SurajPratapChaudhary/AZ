@@ -12,29 +12,17 @@ struct StudioView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                    Text("Studio")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.white)
-                        .padding(.top, 10)
-                        .padding(.bottom, 20)
-                    
-                    if vm.isLoading && vm.items.isEmpty {
-                        LoadingView()
-                    } else if let error = vm.errorMessage {
-                        ErrorView(error)
-                    } else if vm.items.isEmpty {
-                        EmptyView()
-                    } else {
-                        MainContent()
-                    }
+            VStack(spacing: 0) {
+                if vm.isLoading && vm.items.isEmpty {
+                    LoadingView()
+                } else if let error = vm.errorMessage {
+                    ErrorView(error)
+                } else if vm.items.isEmpty {
+                    EmptyView()
+                } else {
+                    MainContent()
                 }
             }
-            .navigationBarHidden(true)
             .fullScreenCover(item: $selectedGridItem) { gridItem in
                 if gridItem.type == "video" || gridItem.type == "mux" {
                     StudioVideoDetailView(item: gridItem.originalItem) {
@@ -46,6 +34,21 @@ struct StudioView: View {
                     }
                 }
             }
+            .navigationTitle("Studio")
+            .navigationBarTitleDisplayMode(.inline)
+            //            .toolbar {
+            //                if #available(iOS 26.0, *) {
+            //                    ToolbarSpacer(.flexible, placement: .principal)
+            //                }
+            //                ToolbarItem(placement: .principal) {
+            //                       Text("Studio")
+            //                        .font(.system(size: 24, weight: .bold, design: .rounded))
+            //                                        .foregroundColor(.primary)
+            //                   }
+            //                if #available(iOS 26.0, *) {
+            //                    ToolbarSpacer(.flexible, placement: .principal)
+            //                }
+            //            }
         }
         .task {
             if vm.items.isEmpty {
@@ -146,7 +149,7 @@ struct StudioItemCard: View {
         ZStack(alignment: .topLeading) {
             GeometryReader { geo in
                 if item.type == "video" || item.type == "mux" {
-                     VideoThumbnailView(videoURL: item.url)
+                    VideoThumbnailView(videoURL: item.url)
                         .aspectRatio(contentMode: .fill)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()

@@ -68,7 +68,7 @@ struct StudioImageDetailView: View {
                 Spacer()
                     .frame(height: 20)
             }
-            .background(.ultraThinMaterial)
+            .background(.ultraThinMaterial.opacity(0.9))
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .padding()
         }
@@ -90,6 +90,11 @@ struct StudioImageDetailView: View {
         }
         .task {
             await loadImage()
+        }
+        .alert("Image Saved", isPresented: $showSaveAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("The image has been saved to your Photos.")
         }
     }
     
@@ -170,6 +175,8 @@ struct StudioImageDetailView: View {
         .padding(.horizontal)
     }
     
+    @State private var showSaveAlert = false
+
     private func loadImage() async {
         // Determine URL logic (same as in body)
         let urlToLoad = selectedURL ?? item.variants.first.flatMap({ URL(string: $0) })
@@ -194,23 +201,33 @@ struct StudioImageDetailView: View {
     private func saveImage() {
         guard let image = loadedImage else { return }
         UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-        // Ideally show a toast
+        
+        // Haptic Feedback
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        
+        showSaveAlert = true
     }
     
     private func shareImage() {
         guard let image = loadedImage else { return }
+        
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootVC = windowScene.windows.first?.rootViewController else { return }
+        
         let activityVC = UIActivityViewController(activityItems: [image], applicationActivities: nil)
         
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first,
-           let rootVC = window.rootViewController {
-            
-            // On iPad, popover is required
-            activityVC.popoverPresentationController?.sourceView = window
-            activityVC.popoverPresentationController?.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
-            
-            rootVC.present(activityVC, animated: true)
+        // Find top-most view controller to present from
+        var topVC = rootVC
+        while let presented = topVC.presentedViewController {
+            topVC = presented
         }
+        
+        // iPad support
+        activityVC.popoverPresentationController?.sourceView = topVC.view
+        activityVC.popoverPresentationController?.sourceRect = CGRect(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY, width: 0, height: 0)
+        
+        topVC.present(activityVC, animated: true)
     }
 }
 
