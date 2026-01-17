@@ -41,6 +41,7 @@ struct PhotoResultsView: View {
                     RetakeButton()
                         .padding(.horizontal, 16)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical)
                 .background(.ultraThinMaterial.opacity(0.9))
                 .clipShape(RoundedRectangle(cornerRadius: 24))
@@ -48,6 +49,11 @@ struct PhotoResultsView: View {
             }
         }
         .safeAreaInset(edge: .top, content: Header)
+        .alert("Image Saved", isPresented: $showSaveAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("The image has been saved to your Photos.")
+        }
     }
     
     @ViewBuilder func Header() -> some View {
@@ -82,11 +88,13 @@ struct PhotoResultsView: View {
         if !variants.isEmpty {
             AuraImageView(url: variants[selectedIndex])
                 .aspectRatio(contentMode: .fill)
+                .frame(maxWidth: .screenWidth, maxHeight: .screenHeight)
                 .ignoresSafeArea()
         } else {
             Image(uiImage: rawImage)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
+                .frame(maxWidth: .screenWidth, maxHeight: .screenHeight)
                 .ignoresSafeArea()
         }
     }
@@ -177,6 +185,9 @@ struct PhotoResultsView: View {
     
     // MARK: - Helper Methods
     
+    // Add logic to show alert
+    @State private var showSaveAlert = false
+    
     private func getSelectedUIImage() async -> UIImage? {
         if variants.isEmpty {
             return rawImage
@@ -197,7 +208,12 @@ struct PhotoResultsView: View {
     private func saveSelectedImage() async {
         guard let image = await getSelectedUIImage() else { return }
         UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-        // Check if we can show a toast here, for now silent success
+        
+        await MainActor.run {
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+            showSaveAlert = true
+        }
     }
     
     private func shareSelectedImage() async {
