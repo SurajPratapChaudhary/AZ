@@ -38,6 +38,14 @@ final class ProfileViewModel: ObservableObject {
             self.credits = response.credits
             // Update shared defaults if needed
             defaults.set(response.credits, forKey: "aura.userCredits")
+        } catch let error as APIError {
+            if case .sessionExpired = error {
+                // Session expired - ContentView will handle navigation to AuthView
+                return
+            }
+            print("Profile fetch error: \(error)")
+            // Fallback to cached if available
+            self.credits = defaults.integer(forKey: "aura.userCredits")
         } catch {
             print("Profile fetch error: \(error)")
             // Fallback to cached if available

@@ -166,6 +166,7 @@ enum APIError: Error {
     case noData
     case decodingError
     case serverError(statusCode: Int, message: String? = nil)
+    case sessionExpired
     case unknown
     case loginFailed(String)
 }
@@ -191,13 +192,22 @@ final class APIClient: APIClientProtocol {
     init() {
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = true
-        config.timeoutIntervalForResource = 180 // Increased to 3 minutes for large uploads
+        config.timeoutIntervalForResource = 180
         config.timeoutIntervalForRequest = 180
         self.session = URLSession(configuration: config)
     }
     
-    // MARK: - Auth
+    /// Checks if the status code is 401 and handles session expiry.
+    /// Returns true if session expired (401), false otherwise.
+    private func handleUnauthorizedIfNeeded(statusCode: Int) -> Bool {
+        if statusCode == 401 {
+            SessionManager.shared.handleSessionExpiry()
+            return true
+        }
+        return false
+    }
     
+    // MARK: - Auth
     func login(token: String, provider: String = "apple") async throws -> LoginResponse {
         let url = baseURL.appendingPathComponent("/api/v1/auth/login")
         Log.d("API Login request: \(url.absoluteString) provider: \(provider)")
@@ -276,6 +286,10 @@ final class APIClient: APIClientProtocol {
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 500
                 Log.e("❌ API enhanceShot failed: \(statusCode)")
                 
+                if handleUnauthorizedIfNeeded(statusCode: statusCode) {
+                    throw APIError.sessionExpired
+                }
+                
                 var errorMessage: String?
                 if let errorJson = try? JSONDecoder().decode(JobResponse.self, from: data) {
                     errorMessage = errorJson.message
@@ -330,6 +344,10 @@ final class APIClient: APIClientProtocol {
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 500
                 Log.e("❌ API generateReel failed: \(statusCode)")
                 
+                if handleUnauthorizedIfNeeded(statusCode: statusCode) {
+                    throw APIError.sessionExpired
+                }
+                
                 // Try to extract error message
                 var errorMessage: String?
                 if let errorJson = try? JSONDecoder().decode(JobResponse.self, from: data) {
@@ -367,6 +385,9 @@ final class APIClient: APIClientProtocol {
         
         if !(200...299).contains(httpResponse.statusCode) {
              Log.e("❌ API getJobStatus failed: \(httpResponse.statusCode)")
+             if handleUnauthorizedIfNeeded(statusCode: httpResponse.statusCode) {
+                 throw APIError.sessionExpired
+             }
              return nil 
         }
         
@@ -421,6 +442,9 @@ final class APIClient: APIClientProtocol {
              if let errorString = String(data: data, encoding: .utf8) {
                  Log.e("API History Error: \(errorString)")
              }
+             if handleUnauthorizedIfNeeded(statusCode: httpResponse.statusCode) {
+                 throw APIError.sessionExpired
+             }
              throw APIError.serverError(statusCode: httpResponse.statusCode)
         }
         
@@ -457,6 +481,9 @@ final class APIClient: APIClientProtocol {
         guard let httpResponse = response as? HTTPURLResponse else { throw APIError.unknown }
         
         if !(200...299).contains(httpResponse.statusCode) {
+            if handleUnauthorizedIfNeeded(statusCode: httpResponse.statusCode) {
+                throw APIError.sessionExpired
+            }
             throw APIError.serverError(statusCode: httpResponse.statusCode, message: nil)
         }
         
@@ -485,6 +512,11 @@ final class APIClient: APIClientProtocol {
             guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 500
                 Log.e("❌ API muxMusic failed: \(statusCode)")
+                
+                if handleUnauthorizedIfNeeded(statusCode: statusCode) {
+                    throw APIError.sessionExpired
+                }
+                
                 logResponse(data, url: url.absoluteString)
                 throw APIError.serverError(statusCode: statusCode)
             }

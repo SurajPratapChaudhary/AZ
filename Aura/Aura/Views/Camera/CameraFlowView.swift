@@ -140,12 +140,16 @@ final class CameraFlowViewModel: ObservableObject {
                  let jobId = try await apiClient.enhanceShot(style: style.rawValue, jpegData: jpegData)
                  Log.d("Enhance job created id=\(jobId)")
                  state = .enhancing(rawPreview: rawImage, jobId: jobId)
-            } catch {
+            } catch let error as APIError {
+                if case .sessionExpired = error {
+                    reset()
+                    return
+                }
                 Log.e("Enhance request failed: \(error)")
                 progressMessage = "Failed to start enhancement."
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 
-                if let apiError = error as? APIError, case let .serverError(code, msg) = apiError {
+                if case let .serverError(code, msg) = error {
                      if code == 402 {
                          errorMessage = msg ?? "Insufficient credits."
                      } else {
@@ -155,6 +159,13 @@ final class CameraFlowViewModel: ObservableObject {
                     errorMessage = error.localizedDescription
                 }
                 
+                showErrorAlert = true
+                state = .mediaCaptured(image: rawImage)
+            } catch {
+                Log.e("Enhance request failed: \(error)")
+                progressMessage = "Failed to start enhancement."
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                errorMessage = error.localizedDescription
                 showErrorAlert = true
                 state = .mediaCaptured(image: rawImage)
             }
@@ -190,6 +201,12 @@ final class CameraFlowViewModel: ObservableObject {
                         return
                     }
                 }
+            } catch let error as APIError {
+                if case .sessionExpired = error {
+                    reset()
+                    return
+                }
+                Log.e("Polling error: \(error)")
             } catch {
                 Log.e("Polling error: \(error)")
             }
@@ -255,12 +272,16 @@ final class CameraFlowViewModel: ObservableObject {
                 Log.d("Reel job created id=\(jobId)")
                 state = .generatingReel(jobId: jobId, selectedImage: image)
                 
-            } catch {
+            } catch let error as APIError {
+                if case .sessionExpired = error {
+                    reset()
+                    return
+                }
                 Log.e("Generate reel error: \(error)")
                 progressMessage = "Failed to start video generation."
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 
-                if let apiError = error as? APIError, case let .serverError(code, msg) = apiError {
+                if case let .serverError(code, msg) = error {
                      if code == 402 {
                          errorMessage = msg ?? "Insufficient credits."
                      } else {
@@ -270,6 +291,13 @@ final class CameraFlowViewModel: ObservableObject {
                     errorMessage = error.localizedDescription
                 }
                 
+                showErrorAlert = true
+                state = .variantsReady(savedResult, rawPreview: savedRaw)
+            } catch {
+                Log.e("Generate reel error: \(error)")
+                progressMessage = "Failed to start video generation."
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                errorMessage = error.localizedDescription
                 showErrorAlert = true
                 state = .variantsReady(savedResult, rawPreview: savedRaw)
             }
@@ -310,6 +338,12 @@ final class CameraFlowViewModel: ObservableObject {
                         return
                     }
                 }
+            } catch let error as APIError {
+                if case .sessionExpired = error {
+                    reset()
+                    return
+                }
+                Log.e("Polling error: \(error)")
             } catch {
                 Log.e("Polling error: \(error)")
             }

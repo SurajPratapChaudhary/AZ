@@ -31,6 +31,13 @@ class VideoResultViewModel: ObservableObject {
                 let jobId = try await apiClient.muxMusic(videoUrl: currentURL)
                 Log.d("Mux job started id=\(jobId)")
                 await pollMuxJob(jobId: jobId, forIndex: selectedReelIndex)
+            } catch let error as APIError {
+                if case .sessionExpired = error {
+                    isMuxing = false
+                    return
+                }
+                Log.e("Mux start failed: \(error)")
+                handleError("Failed to start music addition.")
             } catch {
                 Log.e("Mux start failed: \(error)")
                 handleError("Failed to start music addition.")
@@ -62,6 +69,12 @@ class VideoResultViewModel: ObservableObject {
                         return
                     }
                 }
+            } catch let error as APIError {
+                if case .sessionExpired = error {
+                    isMuxing = false
+                    return
+                }
+                Log.e("Polling mux error: \(error)")
             } catch {
                 Log.e("Polling mux error: \(error)")
             }

@@ -46,6 +46,10 @@ struct ContentView: View {
                 showSplash = false
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .sessionExpired)) { _ in
+            // Clear auth token to trigger navigation to AuthView
+            authToken = nil
+        }
     }
     
     private var hasAllPermissions: Bool {

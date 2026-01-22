@@ -87,6 +87,13 @@ final class StudioViewModel: ObservableObject {
                 }
             }
             
+        } catch let error as APIError {
+            if case .sessionExpired = error {
+                // Session expired - ContentView will handle navigation to AuthView
+                return
+            }
+            print("Studio fetch error: \(error)")
+            self.errorMessage = "Failed to load studio history."
         } catch {
             print("Studio fetch error: \(error)")
             self.errorMessage = "Failed to load studio history."
@@ -136,6 +143,17 @@ final class StudioViewModel: ObservableObject {
                 let jobId = try await apiClient.generateReel(imagesData: [data])
                 state = .generatingReel(jobId: jobId, selectedImage: image)
                 
+            } catch let error as APIError {
+                if case .sessionExpired = error {
+                    state = .idle
+                    return
+                }
+                print("Generate reel error: \(error)")
+                progressMessage = "Failed to start video generation."
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                errorMessage = "Failed to start video generation."
+                showErrorAlert = true
+                state = .idle
             } catch {
                 print("Generate reel error: \(error)")
                 progressMessage = "Failed to start video generation."
@@ -177,6 +195,12 @@ final class StudioViewModel: ObservableObject {
                         return
                     }
                 }
+            } catch let error as APIError {
+                if case .sessionExpired = error {
+                    state = .idle
+                    return
+                }
+                print("Polling error: \(error)")
             } catch {
                 print("Polling error: \(error)")
             }
