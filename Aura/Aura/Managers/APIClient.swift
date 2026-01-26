@@ -73,13 +73,18 @@ struct LoginResponse: Codable {
         return data?.access_token ?? ""
     }
     
+    var refresh_token: String {
+        return data?.refresh_token ?? ""
+    }
+    
     var user: User {
         return data?.user ?? User(id: "", email: "", credits: 0)
     }
     
     struct LoginData: Codable {
         let access_token: String
-        let token_type: String
+        let refresh_token: String?
+        let token_type: String?
         let user: User
     }
     
@@ -171,22 +176,52 @@ enum APIError: Error {
     case loginFailed(String)
 }
 
+struct UserResponse: Codable {
+    let success: Bool?
+    let message: String?
+    let data: UserData?
+    
+    struct UserData: Codable {
+        let id: String
+        let email: String
+        let credits: Int
+        let created_at: String?
+    }
+}
+
+struct RefreshTokenResponse: Codable {
+    let success: Bool?
+    let message: String?
+    let data: TokenData?
+    
+    var access_token: String {
+        return data?.access_token ?? ""
+    }
+    
+    struct TokenData: Codable {
+        let access_token: String
+        let token_type: String?
+    }
+}
+
 protocol APIClientProtocol {
     func login(token: String, provider: String) async throws -> LoginResponse
+    func getUser() async throws -> UserResponse
+    func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse
     func enhanceShot(style: String, jpegData: Data) async throws -> String
     func generateReel(imagesData: [Data]) async throws -> String
-    func getJobStatus(jobId: String) async throws -> PhotoJobResult?
+    func getJobStatus(jobId: String) async throws -> PhotoJobResult? 
     func getStudioHistory(limit: Int, offset: Int) async throws -> StudioHistoryResponse
     func getCredits() async throws -> CreditsResponse
     func muxMusic(videoUrl: URL) async throws -> String
-    
-    // Kept for backward compatibility
     func createPhotoJob(style: AuraStyle, jpegData: Data) async throws -> String
     func pollPhotoJob(jobId: String) async throws -> PhotoJobResult?
 }
 
 final class APIClient: APIClientProtocol {
-    private let baseURL = URL(string: "https://aura.zbekz.com")!
+//    private let baseURL = URL(string: "https://aura.zbekz.com")!
+//    private let baseURL = URL(string: "https://api.wearestellar.com")!
+    private let baseURL = URL(string: "http://98.88.32.51:8000")!
     private let session: URLSession
     
     init() {
@@ -251,6 +286,65 @@ final class APIClient: APIClientProtocol {
             Log.e("API Login Exception: \(error)")
             throw error
         }
+    }
+    
+    func getUser() async throws -> UserResponse {
+        let url = baseURL.appendingPathComponent("/api/v1/user")
+        Log.d("API Get User: \(url.absoluteString)")
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        
+        if let token = UserDefaults.standard.string(forKey: SessionManager.authTokenKey) {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.unknown
+        }
+        
+        Log.d("API Get User Response Status: \(httpResponse.statusCode)")
+        
+        if httpResponse.statusCode == 401 {
+            Log.e("API Get User: Token expired (401)")
+            throw APIError.sessionExpired
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+            throw APIError.serverError(statusCode: httpResponse.statusCode)
+        }
+        
+        logResponse(data, url: url.absoluteString)
+        return try JSONDecoder().decode(UserResponse.self, from: data)
+    }
+    
+    func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse {
+        var urlComponents = URLComponents(string: baseURL.appendingPathComponent("/api/v1/auth/refresh").absoluteString)!
+        urlComponents.queryItems = [URLQueryItem(name: "refresh_token", value: refreshToken)]
+        
+        guard let url = urlComponents.url else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.unknown
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+            if let errorString = String(data: data, encoding: .utf8) {
+                Log.e("API Refresh Token Error: \(errorString)")
+            }
+            throw APIError.serverError(statusCode: httpResponse.statusCode)
+        }
+        
+        return try JSONDecoder().decode(RefreshTokenResponse.self, from: data)
     }
     
     // MARK: - Jobs

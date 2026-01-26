@@ -17,7 +17,7 @@ final class AuthService: ObservableObject {
     }
     
     func checkSession() {
-        if let token = defaults.string(forKey: "aura.authToken"), !token.isEmpty {
+        if let token = defaults.string(forKey: SessionManager.authTokenKey), !token.isEmpty {
             self.isAuthenticated = true
             self.userId = defaults.string(forKey: "aura.userId")
         } else {
@@ -26,24 +26,26 @@ final class AuthService: ObservableObject {
     }
     
     func login(token: String, provider: String = "apple") async throws {
-        do {
-            let response = try await apiClient.login(token: token, provider: provider)
-            // Save session
-            defaults.set(response.access_token, forKey: "aura.authToken")
-            defaults.set(response.user.id, forKey: "aura.userId")
-            defaults.set(response.user.email, forKey: "aura.userEmail")
-            defaults.set(response.user.credits, forKey: "aura.userCredits")
-            
-            self.isAuthenticated = true
-        } catch {
-            print("Auth Service Login Error: \(error)")
-            throw error
+        let response = try await apiClient.login(token: token, provider: provider)
+        
+        defaults.set(response.access_token, forKey: SessionManager.authTokenKey)
+        defaults.set(response.user.id, forKey: "aura.userId")
+        defaults.set(response.user.email, forKey: "aura.userEmail")
+        defaults.set(response.user.credits, forKey: "aura.userCredits")
+        
+        // Save the refresh token from the backend response
+        if !response.refresh_token.isEmpty {
+            SessionManager.shared.saveRefreshToken(response.refresh_token, provider: provider)
+        } else {
+             // Fallback: use the input token if backend doesn't return one (shouldn't happen with new API)
+             SessionManager.shared.saveRefreshToken(token, provider: provider)
         }
+        
+        self.isAuthenticated = true
     }
     
     func signOut() {
-        defaults.removeObject(forKey: "aura.authToken")
-        defaults.removeObject(forKey: "aura.userId")
+        SessionManager.shared.logout()
         self.isAuthenticated = false
     }
 }

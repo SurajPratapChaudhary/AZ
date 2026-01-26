@@ -38,18 +38,38 @@ struct ContentView: View {
             }
         }
         .task {
-            await permissionManager.refresh()
+            let startTime = Date()
+            
+            async let permissionsTask: () = permissionManager.refresh()
+            async let validationTask: Bool = validateSessionIfNeeded()
+            
+            await permissionsTask
+            let isValid = await validationTask
+            
+            if !isValid {
+                authToken = nil
+            }
+            
             isCheckedPermissions = true
             
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            let elapsed = Date().timeIntervalSince(startTime)
+            let minimumSplashTime: TimeInterval = 2.0
+            if elapsed < minimumSplashTime {
+                try? await Task.sleep(nanoseconds: UInt64((minimumSplashTime - elapsed) * 1_000_000_000))
+            }
+            
             withAnimation {
                 showSplash = false
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .sessionExpired)) { _ in
-            // Clear auth token to trigger navigation to AuthView
             authToken = nil
         }
+    }
+    
+    private func validateSessionIfNeeded() async -> Bool {
+        guard SessionManager.shared.hasValidSession else { return true }
+        return await SessionManager.shared.validateSession()
     }
     
     private var hasAllPermissions: Bool {
