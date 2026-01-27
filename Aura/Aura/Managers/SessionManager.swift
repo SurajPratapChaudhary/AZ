@@ -66,13 +66,9 @@ final class SessionManager {
         do {
             let _ = try await apiClient.getUser()
             return true
-        } catch let error as APIError {
-            if case .sessionExpired = error {
-                return await attemptTokenRefresh()
-            }
-            return true
         } catch {
-            return true
+            Log.e("Session validation failed with error: \(error). Attempting refresh.")
+            return await attemptTokenRefresh()
         }
     }
     
@@ -95,8 +91,18 @@ final class SessionManager {
             }
             
             saveAccessToken(newAccessToken)
-            Log.d("Token refreshed successfully")
-            return true
+            Log.d("Token refreshed successfully. Verifying new session...")
+            
+            // Verify new token works
+            do {
+                let _ = try await apiClient.getUser()
+                Log.d("New session verified")
+                return true
+            } catch {
+                Log.e("New token validation failed: \(error)")
+                handleSessionExpiry()
+                return false
+            }
         } catch {
             Log.e("Token refresh failed: \(error)")
             handleSessionExpiry()

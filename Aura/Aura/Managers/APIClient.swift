@@ -210,7 +210,7 @@ protocol APIClientProtocol {
     func refreshToken(refreshToken: String) async throws -> RefreshTokenResponse
     func enhanceShot(style: String, jpegData: Data) async throws -> String
     func generateReel(imagesData: [Data]) async throws -> String
-    func getJobStatus(jobId: String) async throws -> PhotoJobResult? 
+    func getJobStatus(jobId: String) async throws -> PhotoJobResult?
     func getStudioHistory(limit: Int, offset: Int) async throws -> StudioHistoryResponse
     func getCredits() async throws -> CreditsResponse
     func muxMusic(videoUrl: URL) async throws -> String
@@ -220,8 +220,8 @@ protocol APIClientProtocol {
 
 final class APIClient: APIClientProtocol {
 //    private let baseURL = URL(string: "https://aura.zbekz.com")!
-//    private let baseURL = URL(string: "https://api.wearestellar.com")!
-    private let baseURL = URL(string: "http://98.88.32.51:8000")!
+    private let baseURL = URL(string: "https://api.wearestellar.com")!
+//    private let baseURL = URL(string: "http://98.88.32.51:8000")!
     private let session: URLSession
     
     init() {
@@ -494,8 +494,31 @@ final class APIClient: APIClientProtocol {
                  throw APIError.decodingError
             }
             
-            // Map output objects to simple URLs
-            let variants = jobData.output_urls?.compactMap { URL(string: $0.url) } ?? []
+            // DEBUG: Log raw output urls
+            if let rawUrls = jobData.output_urls {
+                Log.d("JobStatus raw output_urls count: \(rawUrls.count)")
+                for (i, outUrl) in rawUrls.enumerated() {
+                    Log.d("  [\(i)]: \(outUrl.url)")
+                }
+            } else {
+                 Log.d("JobStatus raw output_urls is NIL")
+            }
+            
+            // Map output objects to simple URLs with fallback for encoding
+            let variants = jobData.output_urls?.compactMap { outUrl -> URL? in
+                if let url = URL(string: outUrl.url) {
+                    return url
+                } else {
+                    Log.e("⚠️ Failed to parse URL: \(outUrl.url)")
+                    // Attempt to encode allowing query characters if that's the issue
+                    if let encoded = outUrl.url.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                       let url = URL(string: encoded) {
+                        Log.d("✅ Recovered URL by encoding: \(encoded)")
+                        return url
+                    }
+                    return nil
+                }
+            } ?? []
             
             return PhotoJobResult(
                 jobId: jobData.job_id,
